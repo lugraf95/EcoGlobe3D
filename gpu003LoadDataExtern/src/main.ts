@@ -85,16 +85,17 @@ async function initWebGPU() {
     const layers = await loadAllGLBLayers('/earth.glb');
     const earthTex = await loadTexture(device, '/Color_Map.jpg');
     const cloudTex = await loadTexture(device, '/Clouds.png');
+    const nightTex = await loadTexture(device, '/Night_Lights.jpg');
     const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat' });
 
-    // PRO-TIP: Uniform Buffer IMMER 16-Byte ausgerichtet (Padding)
-    const timeBuffer = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-
+    const earthTimeBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    const cloudTimeBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     const createBuf = (data: Float32Array) => {
         const buf = device.createBuffer({ size: data.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         device.queue.writeBuffer(buf, 0, data);
         return buf;
     };
+
 
     const earthBuf = createBuf(layers.earth);
     const cloudBuf = createBuf(layers.clouds);
@@ -117,7 +118,7 @@ async function initWebGPU() {
                 }
             }]
         },
-        primitive: { topology: "triangle-list", cullMode: "none" },
+        primitive: { topology: "triangle-list", cullMode: "back" },
         depthStencil: { 
         depthWriteEnabled: true, 
         depthCompare: 'less-equal', 
@@ -125,12 +126,24 @@ async function initWebGPU() {
     }
     });
 
-    const createBG = (tex: GPUTexture) => device.createBindGroup({
+    // 2. Erstelle die Bind-Groups NEU mit 4 Bindings (0, 1, 2, 3)
+    const earthBG = device.createBindGroup({
         layout: pipeline.getBindGroupLayout(0),
         entries: [
-            { binding: 0, resource: tex.createView() },
+            { binding: 0, resource: earthTex.createView() },
             { binding: 1, resource: sampler },
-            { binding: 2, resource: { buffer: timeBuffer } }
+            { binding: 2, resource: { buffer: earthTimeBuf } }, // FIX: Erde bekommt ihren eigenen Puffer
+            { binding: 3, resource: nightTex.createView() } 
+        ]
+    });
+
+    const cloudBG = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+            { binding: 0, resource: cloudTex.createView() },
+            { binding: 1, resource: sampler },
+            { binding: 2, resource: { buffer: cloudTimeBuf } }, // FIX: Wolken bekommen ihren eigenen Puffer
+            { binding: 3, resource: cloudTex.createView() } 
         ]
     });
     const depthTexture = device.createTexture({
@@ -138,46 +151,56 @@ async function initWebGPU() {
     format: 'depth24plus',
     usage: GPUTextureUsage.RENDER_ATTACHMENT
     });
-    const earthBG = createBG(earthTex);
-    const cloudBG = createBG(cloudTex);
+    
 
     function render(now: number) {
-    const time = now / 1000.0;
-    const encoder = device.createCommandEncoder();
-    
-    const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-            view: context.getCurrentTexture().createView(),
-            clearValue: { r: 0.01, g: 0.01, b: 0.05, a: 1.0 },
-            loadOp: "clear", storeOp: "store",
-        }],
-        // FIX: Hier muss die Tiefentextur rein!
-        depthStencilAttachment: {
-            view: depthTexture.createView(),
-            depthClearValue: 1.0, 
-            depthLoadOp: 'clear', 
-            depthStoreOp: 'store'
-        }
-    });
+        const time = now / 1000.0;
+        const encoder = device.createCommandEncoder();
+        
+        const pass = encoder.beginRenderPass({
+            colorAttachments: [{
+                view: context.getCurrentTexture().createView(),
+                clearValue: { r: 0.01, g: 0.01, b: 0.05, a: 1.0 },
+                loadOp: "clear", storeOp: "store",
+            }],
+            depthStencilAttachment: {
+                view: depthTexture.createView(),
+                depthClearValue: 1.0, 
+                depthLoadOp: 'clear', 
+                depthStoreOp: 'store'
+            }
+        });
 
-    pass.setPipeline(pipeline);
-    
-    // Erde zeichnen
-    device.queue.writeBuffer(timeBuffer, 0, new Float32Array([time * 0.02, 0, 0, 0])); // 16-Byte Padding beachten!
-    pass.setVertexBuffer(0, earthBuf);
-    pass.setBindGroup(0, earthBG);
-    pass.draw(layers.earth.length / 3);
+        pass.setPipeline(pipeline);
+        
+        const sunDirX = 0.67;
+        const sunDirY = 0.0;
+        const sunDirZ = 0.13;
 
-    // Wolken zeichnen
-    device.queue.writeBuffer(timeBuffer, 0, new Float32Array([time * 0.03, 0, 0, 0]));
-    pass.setVertexBuffer(0, cloudBuf);
-    pass.setBindGroup(0, cloudBG);
-    pass.draw(layers.clouds.length / 3);
+        // --- ERDE ZEICHNEN ---
+        // isCloud = 0.0
+        device.queue.writeBuffer(earthTimeBuf, 0, new Float32Array([
+            time * 0.02, 0.0, 0, 0,       
+            sunDirX, sunDirY, sunDirZ, 0 
+        ]));
+        pass.setVertexBuffer(0, earthBuf);
+        pass.setBindGroup(0, earthBG);
+        pass.draw(layers.earth.length / 3);
 
-    pass.end();
-    device.queue.submit([encoder.finish()]);
-    requestAnimationFrame(render);
-}
+        // --- WOLKEN ZEICHNEN ---
+        // isCloud = 1.0
+        device.queue.writeBuffer(cloudTimeBuf, 0, new Float32Array([
+            time * 0.03, 1.0, 0, 0,       
+            sunDirX, sunDirY, sunDirZ, 0 
+        ]));
+        pass.setVertexBuffer(0, cloudBuf);
+        pass.setBindGroup(0, cloudBG);
+        pass.draw(layers.clouds.length / 3);
+
+        pass.end();
+        device.queue.submit([encoder.finish()]);
+        requestAnimationFrame(render);
+    }
     requestAnimationFrame(render);
 }
 
