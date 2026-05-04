@@ -99,20 +99,6 @@ async function initWebGPU() {
         });
     }
 
-    // =================================================================
-    // 4. ZEICHNEN (RENDER PASS)
-    // =================================================================
-    const encoder: GPUCommandEncoder = device.createCommandEncoder();
-
-    const pass: GPURenderPassEncoder = encoder.beginRenderPass({
-        colorAttachments: [{
-            view: context.getCurrentTexture().createView(),
-            clearValue: { r: 0.1, g: 0.2, b: 0.1, a: 1.0 }, 
-            loadOp: "clear",
-            storeOp: "store",
-        }]
-    });
-
 // =================================================================
     // 4. ZEICHNEN (RENDER LOOP / FRAME ARCHITEKTUR)
     // =================================================================
