@@ -42,15 +42,12 @@ fn vertexMain(@location(0) pos: vec3<f32>) -> VertexOutput {
     let zOffset = frame.isCloud * 0.009;
     
     // Finale Position berechnen: X und Y skalieren, Z flacher machen und den Wolken-Offset anwenden.
-    out.position = vec4<f32>(pure_pos.x * scale, pure_pos.y * scale, (pure_pos.z * 0.1) + 0.5 - zOffset, 1.0);
+    // --> Z-Achse verläuft von 0.0 (sehr nah) bis 1.0 (weit weg)
+    //     => Da Daten der Z-Achse von -1 bis +1 normalisiert, Verschiebung auf 0.4-0,6 (Wolken werden etwas näher angezeigt)
+    out.position = vec4<f32>(pure_pos.x * (scale - 0.2), pure_pos.y * scale, (pure_pos.z * 0.1) + 0.5 - zOffset, 1.0);
     
     // Da es eine Kugel ist, entspricht die Position (vom Nullpunkt ausgehend) exakt der Normalen (Blickrichtung der Fläche).
     out.normal = pure_pos; 
-    
-    // (Altlasten: Diese UV-Berechnung ist hier überflüssig geworden, da wir sie im Fragment-Shader machen. Tut aber nicht weh!)
-    let u = 0.5 + (atan2(pure_pos.z, pure_pos.x) / (2.0 * 3.14159265));
-    let v = 0.5 - (asin(clamp(pure_pos.y, -0.99, 0.99)) / 3.14159265);
-    out.uv = vec2<f32>(u + frame.time, v);
     
     return out;
 }
@@ -62,8 +59,8 @@ fn vertexMain(@location(0) pos: vec3<f32>) -> VertexOutput {
 fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal); // Stellt sicher, dass die Normale immer Länge 1 hat.
     
-    // --- UV-NAHT-FIX ---
     // Wir wandeln den 3D-Punkt in 2D-Koordinaten (u, v) für die Texturkarte um.
+    // --> 3D-Koordinate der Erde wird auf Farbwert aus Color_Map.jpg gemapped (nur hier die Farbinformationen)
     // atan2 = Längengrad (Links/Rechts), asin = Breitengrad (Oben/Unten).
     let u = 0.5 + (atan2(n.z, n.x) / (2.0 * 3.14159265));
     let v = 0.5 - (asin(clamp(n.y, -0.99, 0.99)) / 3.14159265);
@@ -102,6 +99,7 @@ fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
         let cleanLights = smoothstep(0.09, 1.3, cityBrightness);
         
         // Wo ist Tag, wo ist Nacht? -0.2 (Schatten) = 1.0 Mix. 0.1 (Licht) = 0.0 Mix.
+        // --> Hierdurch wird die klare Abgrenzung zwischen Tag und Nacht realisiert
         let nightMix = 1.0 - smoothstep(-0.2, 0.1, lightIntensity);
         
         // Die sauberen Lichter mit dem Nacht-Übergang multiplizieren und leicht gelb einfärben (1.0, 0.9, 0.7).
