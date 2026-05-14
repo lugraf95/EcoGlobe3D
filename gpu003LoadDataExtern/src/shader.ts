@@ -77,7 +77,7 @@ fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     var emission = vec3<f32>(0.0, 0.0, 0.0); // Leuchtkraft für Städte (startet bei Null)
     
     // --- MODUS: WOLKEN ---
-    if (frame.isCloud > 0.5) {
+    if (frame.isCloud == 1) {
         // Helligkeit der Wolkentextur ermitteln (größter Farbkanal)
         let brightness = max(texColor.r, max(texColor.g, texColor.b));
         
