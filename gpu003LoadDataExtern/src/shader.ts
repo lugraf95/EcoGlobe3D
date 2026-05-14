@@ -62,7 +62,7 @@ fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     // Wir wandeln den 3D-Punkt in 2D-Koordinaten (u, v) für die Texturkarte um.
     // --> 3D-Koordinate der Erde wird auf Farbwert aus Color_Map.jpg gemapped (nur hier die Farbinformationen)
     // atan2 = Längengrad (Links/Rechts), asin = Breitengrad (Oben/Unten).
-    let u = 0.5 + (atan2(n.z, n.x) / (2.0 * 3.14159265));
+    let u = 0.5 - (atan2(n.z, n.x) / (2.0 * 3.14159265));
     let v = 0.5 - (asin(clamp(n.y, -0.99, 0.99)) / 3.14159265);
     let uv = vec2<f32>(u + frame.time, v); // time addieren sorgt für die Rotation!
     
