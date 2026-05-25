@@ -9,6 +9,9 @@
     "preview": "vite preview"
   },
   "devDependencies": {
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
     "@webgpu/types": "^0.1.69",
     "typescript": "~6.0.2",
     "vite": "^8.0.10"
@@ -16,6 +19,8 @@
   "dependencies": {
     "@dcl/gltf-validator-ts": "^1.0.19",
     "@loaders.gl/core": "^4.4.1",
-    "@loaders.gl/gltf": "^4.4.1"
+    "@loaders.gl/gltf": "^4.4.1",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
   }
 }
