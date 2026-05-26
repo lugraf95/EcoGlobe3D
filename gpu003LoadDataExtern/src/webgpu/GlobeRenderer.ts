@@ -1,9 +1,42 @@
 import { shaderCode } from './shader';
+import { InputController } from './InputController';
 
 type LayerMeshes = {
   earth: Float32Array;
   clouds: Float32Array;
 };
+
+/**
+ * FrameData Uniform Structure (48 bytes / 12 floats)
+ * MUST match the shader.wgsl struct definition exactly!
+ * 
+ * Layout (in order):
+ *   time:        f32  (4 bytes)  - elapsed time in seconds
+ *   isCloud:     f32  (4 bytes)  - 0.0 for earth, 1.0 for clouds
+ *   rotX:        f32  (4 bytes)  - X-axis rotation (pitch)
+ *   rotY:        f32  (4 bytes)  - Y-axis rotation (yaw)
+ *   zoom:        f32  (4 bytes)  - zoom level (1.0 = default)
+ *   aspectRatio: f32  (4 bytes)  - canvas width / canvas height
+ *   sunDirX:     f32  (4 bytes)  - sun direction X component
+ *   sunDirY:     f32  (4 bytes)  - sun direction Y component
+ *   sunDirZ:     f32  (4 bytes)  - sun direction Z component
+ *   pad1:        f32  (4 bytes)  - padding for 48-byte alignment
+ *   pad2:        f32  (4 bytes)  - padding for 48-byte alignment
+ *   pad3:        f32  (4 bytes)  - padding for 48-byte alignment
+ * 
+ * Total: 12 floats × 4 bytes = 48 bytes
+ */
+interface FrameData {
+  time: number;
+  isCloud: number;
+  rotX: number;
+  rotY: number;
+  zoom: number;
+  aspectRatio: number;
+  sunDirX: number;
+  sunDirY: number;
+  sunDirZ: number;
+}
 
 export class GlobeRenderer {
   private canvas: HTMLCanvasElement;
@@ -19,6 +52,8 @@ export class GlobeRenderer {
   private cloudTimeBuf!: GPUBuffer;
   private layers!: LayerMeshes;
   private animationFrameId = 0;
+  private inputController!: InputController;
+  private format!: GPUTextureFormat;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -80,17 +115,41 @@ export class GlobeRenderer {
     };
   }
 
+  /**
+   * Convert FrameData interface to Float32Array (12 floats = 48 bytes)
+   * Order MUST match shader.wgsl struct definition
+   */
+  private frameDataToBuffer(frame: FrameData): Float32Array {
+    return new Float32Array([
+      frame.time,        // [0]
+      frame.isCloud,     // [1]
+      frame.rotX,        // [2]
+      frame.rotY,        // [3]
+      frame.zoom,        // [4]
+      frame.aspectRatio, // [5]
+      frame.sunDirX,     // [6]
+      frame.sunDirY,     // [7]
+      frame.sunDirZ,     // [8]
+      0.0,               // [9] padding
+      0.0,               // [10] padding
+      0.0,               // [11] padding
+    ]);
+  }
+
   public async init() {
     this.canvas.width = this.canvas.clientWidth;
     this.canvas.height = this.canvas.clientHeight;
     const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) throw new Error('Kein Adapter gefunden');
+    if (!adapter) throw new Error('No WebGPU adapter found');
     this.device = await adapter.requestDevice({
       requiredLimits: { maxTextureDimension2D: adapter.limits.maxTextureDimension2D },
     });
     this.context = this.canvas.getContext('webgpu') as GPUCanvasContext;
-    const format = navigator.gpu.getPreferredCanvasFormat();
-    this.context.configure({ device: this.device, format, alphaMode: 'opaque' });
+    this.format = navigator.gpu.getPreferredCanvasFormat();
+    this.context.configure({ device: this.device, format: this.format, alphaMode: 'opaque' });
+
+    // Initialize InputController for mouse/wheel interactions
+    this.inputController = new InputController(this.canvas);
 
     this.layers = await this.loadAllGLBLayers('/earth.glb');
     const earthTex = await this.loadTexture('/Color_Map.jpg');
@@ -99,8 +158,9 @@ export class GlobeRenderer {
 
     const sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat' });
 
-    this.earthTimeBuf = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.cloudTimeBuf = this.device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    // Create uniform buffers (48 bytes each = 12 floats for FrameData)
+    this.earthTimeBuf = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.cloudTimeBuf = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
 
     const createBuf = (data: Float32Array) => {
       const buf = this.device.createBuffer({ size: data.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
@@ -123,7 +183,7 @@ export class GlobeRenderer {
         entryPoint: 'fragmentMain',
         targets: [
           {
-            format,
+            format: this.format,
             blend: {
               color: { operation: 'add', srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
               alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
@@ -184,24 +244,50 @@ export class GlobeRenderer {
       });
 
       pass.setPipeline(this.pipeline);
+
+      // Read current input state
+      const rotX = this.inputController.rotX;
+      const rotY = this.inputController.rotY;
+      const zoom = this.inputController.zoom;
+      const aspectRatio = this.canvas.width / this.canvas.height;
+
+      // Sun direction
       const sunDirX = 0.67;
       const sunDirY = 0.0;
       const sunDirZ = 0.13;
 
-      this.device.queue.writeBuffer(
-        this.earthTimeBuf,
-        0,
-        new Float32Array([time * 0.02, 0.0, 0, 0, sunDirX, sunDirY, sunDirZ, 0]),
-      );
+      // Prepare earth frame data
+      const earthFrame: FrameData = {
+        time: time * 0.02,
+        isCloud: 0.0,
+        rotX,
+        rotY,
+        zoom,
+        aspectRatio,
+        sunDirX,
+        sunDirY,
+        sunDirZ,
+      };
+
+      this.device.queue.writeBuffer(this.earthTimeBuf, 0, this.frameDataToBuffer(earthFrame));
       pass.setVertexBuffer(0, this.earthBuf);
       pass.setBindGroup(0, this.earthBG);
       pass.draw(this.layers.earth.length / 3);
 
-      this.device.queue.writeBuffer(
-        this.cloudTimeBuf,
-        0,
-        new Float32Array([time * 0.03, 1.0, 0, 0, sunDirX, sunDirY, sunDirZ, 0]),
-      );
+      // Prepare cloud frame data
+      const cloudFrame: FrameData = {
+        time: time * 0.03,
+        isCloud: 1.0,
+        rotX,
+        rotY,
+        zoom,
+        aspectRatio,
+        sunDirX,
+        sunDirY,
+        sunDirZ,
+      };
+
+      this.device.queue.writeBuffer(this.cloudTimeBuf, 0, this.frameDataToBuffer(cloudFrame));
       pass.setVertexBuffer(0, this.cloudBuf);
       pass.setBindGroup(0, this.cloudBG);
       pass.draw(this.layers.clouds.length / 3);
@@ -213,11 +299,17 @@ export class GlobeRenderer {
     this.animationFrameId = requestAnimationFrame(render);
   }
 
+  /**
+   * Stop the animation loop and cleanup input controller.
+   * Call this when unmounting the React component.
+   */
   public stop() {
     cancelAnimationFrame(this.animationFrameId);
+    // Clean up input event listeners
+    this.inputController.cleanup();
   }
 
   public updateLayerData(layerType: string, bufferData: Float32Array) {
-    console.log(`[WebGPU] Renderer hat neue Daten für ${layerType} empfangen!`, bufferData.length);
+    console.log(`[WebGPU] Renderer received new data for ${layerType}!`, bufferData.length);
   }
 }
