@@ -51,9 +51,10 @@ export function App() {
     })();
 
     // Cleanup function: Called on unmount
+    // This ensures all event listeners and requestAnimationFrame are cleaned up
     return () => {
       if (renderer) {
-        // This calls inputController.cleanup() internally
+        // GlobeRenderer.stop() internally calls inputController.cleanup()
         renderer.stop();
       }
     };
