@@ -1,31 +1,20 @@
-import { shaderCode } from "./shader";
+import { InputController } from './InputController';
+import { GlobeRenderer } from './GlobeRenderer';
 
 const canvas = document.querySelector<HTMLCanvasElement>("#testWebGPU")!;
 
-// ==========================================
-// HILFSFUNKTION: TEXTUREN LADEN
-// ==========================================
+// --- DEINE ALTEN HILFSFUNKTIONEN (Unverändert) ---
 async function loadTexture(device: GPUDevice, url: string): Promise<GPUTexture> {
-    const img = new Image();
-    img.src = url;
-    await img.decode(); // Wartet, bis das Bild vom Browser entpackt wurde
-    const imageBitmap = await createImageBitmap(img); // Konvertiert es in ein GPU-freundliches Format
-    
-    // Erstellt einen leeren Speicherbereich auf der Grafikkarte für das Bild
+    const img = new Image(); img.src = url; await img.decode();
+    const imageBitmap = await createImageBitmap(img);
     const texture = device.createTexture({
         size: [imageBitmap.width, imageBitmap.height, 1],
-        format: 'rgba8unorm', // 8 Bit pro Kanal (Rot, Grün, Blau, Alpha)
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
+        format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
     });
-    
-    // Kopiert die Bilddaten aus dem RAM in den VRAM (Grafikkartenspeicher)
     device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture }, [imageBitmap.width, imageBitmap.height]);
     return texture;
 }
 
-// ==========================================
-// HILFSFUNKTION: 3D-MODELLE (GLB) PARSEN
-// ==========================================
 async function loadAllGLBLayers(url: string) {
     const response = await fetch(url);
     const arrayBuffer = await response.arrayBuffer(); // Lädt die rohe Binärdatei (.glb)
@@ -74,166 +63,41 @@ async function loadAllGLBLayers(url: string) {
     };
 }
 
-// ==========================================
-// HAUPTFUNKTION: WEBGPU SETUP & RENDER-LOOP
-// ==========================================
-async function initWebGPU() {
+// --- SETUP ---
+async function bootstrap() {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
 
-    // 1. GPU Adapter anfordern (Grafikkarte suchen)
     const adapter = await navigator.gpu.requestAdapter();
-    if (!adapter) throw new Error("Kein Adapter gefunden");
-
-    // 2. Device (Sitzung mit der GPU) anfordern und erlauben, dass Texturen bis zu 16k/32k groß sein dürfen
-    const device = await adapter.requestDevice({
-        requiredLimits: { maxTextureDimension2D: adapter.limits.maxTextureDimension2D }
-    });
-
-    if (adapter.limits.maxTextureDimension2D < 10800) {
-        console.warn("Deine Hardware unterstützt keine 10k Texturen.");
-    }
-
-    // 3. Canvas für WebGPU konfigurieren
+    const device = await adapter!.requestDevice({ requiredLimits: { maxTextureDimension2D: adapter!.limits.maxTextureDimension2D } });
     const context = canvas.getContext("webgpu")!;
     const format = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format, alphaMode: "opaque" });
 
-    // 4. Lade alle Assets (Modelle und 3 Bilder) asynchron herunter
+    // 1. Controller & Renderer instanziieren
+    const input = new InputController(canvas);
+    const renderer = new GlobeRenderer(device, context, format, input);
+
+    // 2. Button-Logik verbinden
+    document.getElementById('btn-normal')?.addEventListener('click', () => renderer.currentMode = 'NORMAL');
+    document.getElementById('btn-temp')?.addEventListener('click', () => renderer.currentMode = 'TEMPERATURE');
+    document.getElementById('btn-wind')?.addEventListener('click', () => renderer.currentMode = 'WIND');
+
+    // 3. Daten laden
     const layers = await loadAllGLBLayers('/earth.glb');
     const earthTex = await loadTexture(device, '/Color_Map.jpg');
     const cloudTex = await loadTexture(device, '/Clouds.png');
     const nightTex = await loadTexture(device, '/Night_Lights.jpg');
-    
-    // Sampler bestimmt, wie Texturen vergrößert/verkleinert werden (linear = weiche Übergänge)
-    const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat' });
 
-    // 5. Speicher für Uniform-Variablen (Zeit, Lichtrichtung) auf der GPU reservieren
-    const earthTimeBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    const cloudTimeBuf = device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    // 4. Renderer finalisieren (WICHTIG: Das await verhindert den "Argument 1 is not an object" Fehler!)
+    await renderer.init(layers, earthTex, cloudTex, nightTex);
 
-    // Hilfsfunktion, um die Vertex-Arrays in GPU-Speicher (Buffer) zu laden
-    const createBuf = (data: Float32Array) => {
-        const buf = device.createBuffer({ size: data.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
-        device.queue.writeBuffer(buf, 0, data);
-        return buf;
-    };
-
-    const earthBuf = createBuf(layers.earth);
-    const cloudBuf = createBuf(layers.clouds);
-
-    // 6. Die Render-Pipeline definieren (Das Regelwerk der Grafikkarte)
-    const pipeline = device.createRenderPipeline({
-        layout: "auto",
-        vertex: {
-            module: device.createShaderModule({ code: shaderCode }),
-            entryPoint: "vertexMain",
-            // ArrayStride = 12: Jeder Vertex besteht aus 3 Floats (X,Y,Z) * 4 Bytes = 12 Bytes.
-            buffers: [{ arrayStride: 12, attributes: [{ shaderLocation: 0, offset: 0, format: "float32x3" }] }]
-        },
-        fragment: {
-            module: device.createShaderModule({ code: shaderCode }),
-            entryPoint: "fragmentMain",
-            targets: [{ 
-                format, 
-                // Aktiviert Transparenz (Alpha Blending) für die Wolken
-                blend: {
-                    color: { operation: 'add', srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-                    alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' }
-                }
-            }]
-        },
-        primitive: { topology: "triangle-list", cullMode: "back" }, // Rückseiten von Dreiecken nicht zeichnen
-        depthStencil: { 
-            depthWriteEnabled: true,       // Z-Werte speichern
-            depthCompare: 'less-equal',    // Nur zeichnen, wenn das Objekt näher (oder gleich nah) an der Kamera ist
-            format: 'depth24plus'          // 24-Bit Genauigkeit für die Tiefe
-        }
-    });
-
-    // 7. BindGroups erstellen. Sie "binden" die konkreten Texturen und Puffer an die im Shader definierten @bindings.
-    const earthBG = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: [
-            { binding: 0, resource: earthTex.createView() },    // Farbkarte
-            { binding: 1, resource: sampler },                  // Sampler
-            { binding: 2, resource: { buffer: earthTimeBuf } }, // Zeit-Puffer für Erde
-            { binding: 3, resource: nightTex.createView() }     // Stadtlichter
-        ]
-    });
-
-    const cloudBG = device.createBindGroup({
-        layout: pipeline.getBindGroupLayout(0),
-        entries: [
-            { binding: 0, resource: cloudTex.createView() },
-            { binding: 1, resource: sampler },
-            { binding: 2, resource: { buffer: cloudTimeBuf } },
-            { binding: 3, resource: cloudTex.createView() }     // Platzhalter (Dummy), wird von Wolken nicht genutzt
-        ]
-    });
-
-    // 8. Tiefentextur erstellen (Das unsichtbare Z-Buffer-Bild)
-    const depthTexture = device.createTexture({
-        size: [canvas.width, canvas.height],
-        format: 'depth24plus',
-        usage: GPUTextureUsage.RENDER_ATTACHMENT
-    });
-    
-    // 9. DIE ENDLOSSCHLEIFE (Render-Loop)
-    function render(now: number) {
-        const time = now / 1000.0;
-        const encoder = device.createCommandEncoder(); // Nimmt GPU-Befehle auf
-        
-        // Pass definiert, wohin gezeichnet wird (Canvas) und wie er gereinigt wird
-        const pass = encoder.beginRenderPass({
-            colorAttachments: [{
-                view: context.getCurrentTexture().createView(),
-                clearValue: { r: 0.01, g: 0.01, b: 0.05, a: 1.0 }, // Dunkelblauer Weltraum-Hintergrund
-                loadOp: "clear", storeOp: "store",
-            }],
-            depthStencilAttachment: {
-                view: depthTexture.createView(),
-                depthClearValue: 1.0,  // "Säubert" den Tiefenpuffer auf unendliche Entfernung
-                depthLoadOp: 'clear', 
-                depthStoreOp: 'store'
-            }
-        });
-
-        pass.setPipeline(pipeline);
-        
-        // Lichtrichtung (Sonne kommt von rechts unten vorne)
-        const sunDirX = 0.67;
-        const sunDirY = 0.0;
-        const sunDirZ = 0.13;
-
-        // --- ERDE ---
-        // Puffer aktualisieren (isCloud = 0.0)
-        device.queue.writeBuffer(earthTimeBuf, 0, new Float32Array([
-            time * 0.02, 0.0, 0, 0,       
-            sunDirX, sunDirY, sunDirZ, 0 
-        ]));
-        pass.setVertexBuffer(0, earthBuf);   // 3D-Modell anlegen
-        pass.setBindGroup(0, earthBG);       // Texturen anlegen
-        pass.draw(layers.earth.length / 3);  // Ausführen! (Anzahl der Vertices = ArrayLänge / 3)
-
-        // --- WOLKEN ---
-        // Puffer aktualisieren (isCloud = 1.0, drehen sich minimal schneller: 0.03)
-        device.queue.writeBuffer(cloudTimeBuf, 0, new Float32Array([
-            time * 0.03, 1.0, 0, 0,       
-            sunDirX, sunDirY, sunDirZ, 0 
-        ]));
-        pass.setVertexBuffer(0, cloudBuf);
-        pass.setBindGroup(0, cloudBG);
-        pass.draw(layers.clouds.length / 3);
-
-        pass.end(); // Aufnahme beenden
-        device.queue.submit([encoder.finish()]); // Befehle an die GPU senden
-        
-        requestAnimationFrame(render); // Nächsten Frame planen
+    // 5. Render Loop
+    function loop(now: number) {
+        renderer.render(now / 1000.0);
+        requestAnimationFrame(loop);
     }
-    
-    // Startschuss!
-    requestAnimationFrame(render);
+    requestAnimationFrame(loop);
 }
 
-initWebGPU().catch(e => console.error(e));
+bootstrap().catch(console.error);
