@@ -8,7 +8,7 @@ type LayerMeshes = {
 
 /**
  * FrameData Uniform Structure (48 bytes / 12 floats)
- * MUST match the shader.wgsl struct definition exactly!
+ * MUST match the shader.ts struct definition exactly!
  * 
  * Layout (in order):
  *   time:        f32  (4 bytes)  - elapsed time in seconds
@@ -117,7 +117,7 @@ export class GlobeRenderer {
 
   /**
    * Convert FrameData interface to Float32Array (12 floats = 48 bytes)
-   * Order MUST match shader.wgsl struct definition
+   * Order MUST match shader.ts struct definition
    */
   private frameDataToBuffer(frame: FrameData): Float32Array {
     return new Float32Array([
@@ -250,6 +250,8 @@ export class GlobeRenderer {
       const rotY = this.inputController.rotY;
       const zoom = this.inputController.zoom;
       const aspectRatio = this.canvas.width / this.canvas.height;
+      const globalRotY = rotY + (time * 0.02);
+      const cloudRotY = rotY + (time * 0.03);
 
       // Sun direction
       const sunDirX = 0.67;
@@ -258,10 +260,10 @@ export class GlobeRenderer {
 
       // Prepare earth frame data
       const earthFrame: FrameData = {
-        time: time * 0.02,
+        time,
         isCloud: 0.0,
         rotX,
-        rotY,
+        rotY: globalRotY,
         zoom,
         aspectRatio,
         sunDirX,
@@ -276,10 +278,10 @@ export class GlobeRenderer {
 
       // Prepare cloud frame data
       const cloudFrame: FrameData = {
-        time: time * 0.03,
+        time,
         isCloud: 1.0,
         rotX,
-        rotY,
+        rotY: cloudRotY,
         zoom,
         aspectRatio,
         sunDirX,
