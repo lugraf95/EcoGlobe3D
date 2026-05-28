@@ -5,11 +5,11 @@ struct FrameData {
     rotX: f32,          
     rotY: f32,          
     zoom: f32,          
-    aspectRatio: f32,   // <--- NEU: Das Seitenverhältnis
+    aspectRatio: f32,
     sunDirX: f32,
     sunDirY: f32,
     sunDirZ: f32,
-    pad1: f32,          // Padding, um exakt auf 12 Floats (48 Bytes) zu kommen
+    pad1: f32,
     pad2: f32,
     pad3: f32,
 };
@@ -38,19 +38,18 @@ fn rotateX(pos: vec3<f32>, angle: f32) -> vec3<f32> {
 fn vertexMain(@location(0) pos: vec3<f32>) -> VertexOutput {
     var out: VertexOutput;
     
-    // UVs werden hier berechnet, BEVOR gedreht wird (Textur klebt auf Kugel)
     let pure_pos = normalize(pos);
     out.uv = vec2<f32>(
         0.5 + (atan2(pure_pos.z, pure_pos.x) / (2.0 * 3.14159265)),
         0.5 - (asin(clamp(pure_pos.y, -0.99, 0.99)) / 3.14159265)
     );
 
-    // Jetzt erst drehen für die Anzeige
     var rotated_pos = rotateX(pure_pos, frame.rotX);
     rotated_pos = rotateY(rotated_pos, frame.rotY);
     
     let scale = (0.6 + (frame.isCloud * 0.005)) * frame.zoom;
-    out.position = vec4<f32>((rotated_pos.x * scale) / frame.aspectRatio, rotated_pos.y * scale, (rotated_pos.z * 0.1) + 0.5, 1.0);
+    let zOffset = frame.isCloud * 0.009;
+    out.position = vec4<f32>((rotated_pos.x * scale) / frame.aspectRatio, rotated_pos.y * scale, (rotated_pos.z * 0.1) + 0.5 - zOffset, 1.0);
     out.normal = rotated_pos; 
     
     return out;
@@ -60,8 +59,6 @@ fn vertexMain(@location(0) pos: vec3<f32>) -> VertexOutput {
 fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     let n = normalize(in.normal);
     
-    // 1. FEHLER BEHOBEN: Klammer zu und Semikolon dran!
-    // Wir nutzen hier direkt das saubere in.uv vom Vertex-Shader.
     let texColor = textureSample(myTexture, mySampler, in.uv);
     var baseColor = texColor.rgb;
     var alpha = 1.0; 
@@ -76,7 +73,6 @@ fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
         alpha = brightness; 
         baseColor = vec3<f32>(1.0, 1.0, 1.0); 
     } else {
-        // 2. ANPASSUNG: Hier bei der nightTexture auch in.uv statt uv benutzen!
         let nightColor = textureSample(nightTexture, mySampler, in.uv).rgb;
         
         let cityBrightness = max(nightColor.r, max(nightColor.g, nightColor.b));
