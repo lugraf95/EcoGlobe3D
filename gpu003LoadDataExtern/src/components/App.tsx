@@ -34,27 +34,32 @@ export function App() {
     if (!canvas) return;
 
     let renderer: GlobeRenderer | null = null;
+    let isMounted = true;
 
     // Initialize renderer
     (async () => {
       try {
         renderer = new GlobeRenderer(canvas);
         await renderer.init();
+
+        if (!isMounted) return;
+
         renderer.start();
         rendererRef.current = renderer;
         setIsLoading(false);
         await loadDataForLayer('wind');
       } catch (err) {
         console.error('WebGPU initialization error:', err);
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     })();
 
-    // Cleanup function: Called on unmount
-    // This ensures all event listeners and requestAnimationFrame are cleaned up
+
     return () => {
+      isMounted = false;
       if (renderer) {
-        // GlobeRenderer.stop() internally calls inputController.cleanup()
         renderer.stop();
       }
     };

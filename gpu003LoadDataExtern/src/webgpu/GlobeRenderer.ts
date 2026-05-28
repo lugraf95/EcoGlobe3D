@@ -307,8 +307,9 @@ export class GlobeRenderer {
    */
   public stop() {
     cancelAnimationFrame(this.animationFrameId);
-    // Clean up input event listeners
-    this.inputController.cleanup();
+    if (this.inputController) {
+      this.inputController.cleanup();
+    }
   }
 
   public updateLayerData(layerType: string, bufferData: Float32Array) {
