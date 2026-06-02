@@ -1,0 +1,41 @@
+:root {
+    --color-panel-background: #111111;
+    --color-text-primary: #ffffff;
+}
+
+.app-container {
+    width: 100vw;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+}
+
+.layer-control-panel {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    z-index: 1;
+    background-color: var(--color-panel-background);
+    color: var(--color-text-primary);
+    padding: 12px;
+    border-radius: 8px;
+    font-family: sans-serif;
+}
+
+.layer-label {
+    margin-right: 8px;
+}
+
+.loading-indicator {
+    margin-top: 8px;
+}
+
+.globe-canvas {
+    width: 100vw;
+    height: 100vh;
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+}
