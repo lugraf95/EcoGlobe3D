@@ -1,14 +1,15 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { GlobeRenderer } from '../webgpu/GlobeRenderer';
 import { fetchWeatherData } from '../services/dataService';
 
 import { LayerDropdown } from './LayerDropdown';
 import './App.css';
+import {LoadingSpinner} from "./LoadingSpinner.tsx";
 
 export function App() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rendererRef = useRef<GlobeRenderer | null>(null);
-    const [activeLayer, setActiveLayer] = useState<string>('wind');
+    const [activeLayer, setActiveLayer] = useState<string>('normal');
     const [isLoading, setIsLoading] = useState<boolean>(true);
 
     const loadDataForLayer = async (layer: string) => {
@@ -23,6 +24,7 @@ export function App() {
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
+
 
         let renderer: GlobeRenderer | null = null;
         let isMounted = true;
@@ -54,8 +56,7 @@ export function App() {
         };
     }, []);
 
-    const handleLayerChange = (e: ChangeEvent<HTMLSelectElement>) => {
-        const newLayer = e.target.value;
+    const handleLayerChange = (newLayer: string) => {
         setActiveLayer(newLayer);
         void loadDataForLayer(newLayer);
     };
@@ -64,10 +65,10 @@ export function App() {
         <div className="app-container">
             <LayerDropdown
                 activeLayer={activeLayer}
-                isLoading={isLoading}
                 onLayerChange={handleLayerChange}
             />
 
+            {isLoading && <LoadingSpinner />}
             <canvas ref={canvasRef} className="globe-canvas" />
         </div>
     );

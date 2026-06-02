@@ -20,6 +20,7 @@
     "@dcl/gltf-validator-ts": "^1.0.19",
     "@loaders.gl/core": "^4.4.1",
     "@loaders.gl/gltf": "^4.4.1",
+    "lucide-react": "^1.17.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   }

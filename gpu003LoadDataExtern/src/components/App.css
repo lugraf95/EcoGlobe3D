@@ -10,26 +10,6 @@
     overflow: hidden;
 }
 
-.layer-control-panel {
-    position: absolute;
-    top: 16px;
-    left: 16px;
-    z-index: 1;
-    background-color: var(--color-panel-background);
-    color: var(--color-text-primary);
-    padding: 12px;
-    border-radius: 8px;
-    font-family: sans-serif;
-}
-
-.layer-label {
-    margin-right: 8px;
-}
-
-.loading-indicator {
-    margin-top: 8px;
-}
-
 .globe-canvas {
     width: 100vw;
     height: 100vh;
