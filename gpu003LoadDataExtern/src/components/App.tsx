@@ -14,11 +14,16 @@ export function App() {
 
     const loadDataForLayer = async (layer: string) => {
         setIsLoading(true);
-        const dataBuffer = await fetchWeatherData(layer);
-        if (rendererRef.current) {
-            rendererRef.current.updateLayerData(layer, dataBuffer);
+        try {
+            const dataBuffer = await fetchWeatherData(layer);
+            if (rendererRef.current) {
+                rendererRef.current.updateLayerData(layer, dataBuffer);
+            }
+        } catch (err) {
+            console.error(`Failed to load data for layer "${layer}".`, err);
+        } finally {
+            setIsLoading(false);
         }
-        setIsLoading(false);
     };
 
     useEffect(() => {
@@ -39,7 +44,7 @@ export function App() {
                 renderer.start();
                 rendererRef.current = renderer;
                 setIsLoading(false);
-                await loadDataForLayer('wind');
+                await loadDataForLayer(activeLayer);
             } catch (err) {
                 console.error('WebGPU initialization error:', err);
                 if (isMounted) {
