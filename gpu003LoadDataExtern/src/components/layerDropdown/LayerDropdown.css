@@ -67,14 +67,32 @@
 
 .layers-body {
     transition: max-height 0.6s ease-in-out, opacity 0.3s ease-in-out, padding 0.3s ease-in-out;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
 }
 
+.layers-body::-webkit-scrollbar {
+    width: 0.25rem;
+}
+
+.layers-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.layers-body::-webkit-scrollbar-thumb {
+    background: var(--color-slate-border-light);
+    border-radius: 1rem;
+}
+
+.layers-body::-webkit-scrollbar-thumb:hover {
+    background: var(--color-slate-text-muted);
+}
+
 .layers-body.expanded {
-    max-height: 31.25rem;
+    max-height: calc(100vh - 8rem); /* Volle höhe des Fensters nutzen, aber 8rem abziehen (Für Responsiveness)*/
     opacity: 1;
     padding: 1rem;
 }
