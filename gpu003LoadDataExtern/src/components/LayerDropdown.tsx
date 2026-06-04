@@ -70,7 +70,6 @@ export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps
                             <button
                                 key={l.id}
                                 onClick={() => onLayerChange(l.id)}
-                                // ID und Status für CSS-Klasse zuweisen
                                 className={`layer-btn ${l.id} ${isSelected ? 'active' : ''}`}
                             >
                                 <div className="icon-wrapper">
