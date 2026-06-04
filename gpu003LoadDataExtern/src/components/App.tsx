@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { GlobeRenderer } from '../webgpu/GlobeRenderer';
 import { fetchWeatherData } from '../services/dataService';
 
-import { LayerDropdown } from './LayerDropdown';
+import { LayerDropdown } from './layerDropdown/LayerDropdown.tsx';
 import './App.css';
-import {LoadingSpinner} from "./LoadingSpinner.tsx";
+import {LoadingSpinner} from "./loadingSpinner/LoadingSpinner.tsx";
 
 export function App() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);

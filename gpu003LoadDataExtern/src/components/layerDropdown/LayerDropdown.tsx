@@ -71,6 +71,7 @@ export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps
                                 key={l.id}
                                 onClick={() => onLayerChange(l.id)}
                                 className={`layer-btn ${l.id} ${isSelected ? 'active' : ''}`}
+                                tabIndex={isLayersExpanded ? 0 : -1}
                             >
                                 <div className="icon-wrapper">
                                     <Icon size={14} />
