@@ -50,6 +50,14 @@
     --color-rose-shadow: rgba(244, 63, 94, 0.2);
 }
 
+html, body, #root {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
 .app-container {
     width: 100vw;
     height: 100vh;
