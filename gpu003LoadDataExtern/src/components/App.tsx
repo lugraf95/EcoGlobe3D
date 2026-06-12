@@ -16,11 +16,7 @@ export function App() {
 
     const validLayers = ['normal', 'temperature', 'wind', 'light'];
 
-    if (!validLayers.includes(layerId as string)) {
-        navigate(`/normal`);
-    }
-
-    const activeLayer = layerId as string;
+    const activeLayer = layerId || 'normal';
 
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isEngineReady, setIsEngineReady] = useState<boolean>(false);
@@ -74,6 +70,12 @@ export function App() {
             void loadDataForLayer(activeLayer);
         }
     }, [isEngineReady, activeLayer]);
+
+    useEffect(() => {
+        if (layerId && !validLayers.includes(layerId)) {
+            navigate(`/normal`, { replace: true });
+        }
+    }, [layerId, navigate]);
 
     const handleLayerChange = (newLayer: string) => {
         navigate(`/${newLayer}`);
