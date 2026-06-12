@@ -1,16 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { GlobeRenderer } from '../webgpu/GlobeRenderer';
 import { fetchWeatherData } from '../services/dataService';
 
 import { LayerDropdown } from './layerDropdown/LayerDropdown.tsx';
 import './App.css';
-import {LoadingSpinner} from "./loadingSpinner/LoadingSpinner.tsx";
+import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
 
 export function App() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rendererRef = useRef<GlobeRenderer | null>(null);
-    const [activeLayer, setActiveLayer] = useState<string>('normal');
+
+    const { layerId } = useParams();
+    const navigate = useNavigate();
+
+    const validLayers = ['normal', 'temperature', 'wind', 'light'];
+
+    const activeLayer = layerId || 'normal';
+
     const [isLoading, setIsLoading] = useState<boolean>(true);
+    const [isEngineReady, setIsEngineReady] = useState<boolean>(false);
 
     const loadDataForLayer = async (layer: string) => {
         setIsLoading(true);
@@ -30,7 +39,6 @@ export function App() {
         const canvas = canvasRef.current;
         if (!canvas) return;
 
-
         let renderer: GlobeRenderer | null = null;
         let isMounted = true;
 
@@ -43,27 +51,34 @@ export function App() {
 
                 renderer.start();
                 rendererRef.current = renderer;
-                setIsLoading(false);
-                await loadDataForLayer(activeLayer);
+
+                setIsEngineReady(true);
             } catch (err) {
                 console.error('WebGPU initialization error:', err);
-                if (isMounted) {
-                    setIsLoading(false);
-                }
+                if (isMounted) setIsLoading(false);
             }
         })();
 
         return () => {
             isMounted = false;
-            if (renderer) {
-                renderer.stop();
-            }
+            if (renderer) renderer.stop();
         };
     }, []);
 
+    useEffect(() => {
+        if (isEngineReady) {
+            void loadDataForLayer(activeLayer);
+        }
+    }, [isEngineReady, activeLayer]);
+
+    useEffect(() => {
+        if (layerId && !validLayers.includes(layerId)) {
+            navigate(`/normal`, { replace: true });
+        }
+    }, [layerId, navigate]);
+
     const handleLayerChange = (newLayer: string) => {
-        setActiveLayer(newLayer);
-        void loadDataForLayer(newLayer);
+        navigate(`/${newLayer}`);
     };
 
     return (
