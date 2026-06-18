@@ -20,9 +20,9 @@ type LayerMeshes = {
  *   sunDirX:     f32  (4 bytes)  - sun direction X component
  *   sunDirY:     f32  (4 bytes)  - sun direction Y component
  *   sunDirZ:     f32  (4 bytes)  - sun direction Z component
- *   pad1:        f32  (4 bytes)  - padding for 48-byte alignment
- *   pad2:        f32  (4 bytes)  - padding for 48-byte alignment
- *   pad3:        f32  (4 bytes)  - padding for 48-byte alignment
+ *   weatherMode: f32  (4 bytes)  - 0 = off, 1 = temperature, 2 = wind focus
+ *   weatherPointCount: f32 (4 bytes) - number of valid weather points in storage buffer
+ *   pad:         f32  (4 bytes)  - padding for 48-byte alignment
  * 
  * Total: 12 floats × 4 bytes = 48 bytes
  */
@@ -36,9 +36,12 @@ interface FrameData {
   sunDirX: number;
   sunDirY: number;
   sunDirZ: number;
+  weatherMode: number;
+  weatherPointCount: number;
 }
 
 export class GlobeRenderer {
+  private static readonly MAX_WEATHER_POINTS = 65536;
   private canvas: HTMLCanvasElement;
   private device!: GPUDevice;
   private context!: GPUCanvasContext;
@@ -50,10 +53,13 @@ export class GlobeRenderer {
   private cloudBuf!: GPUBuffer;
   private earthTimeBuf!: GPUBuffer;
   private cloudTimeBuf!: GPUBuffer;
+  private weatherBuf!: GPUBuffer;
   private layers!: LayerMeshes;
   private animationFrameId = 0;
   private inputController!: InputController;
   private format!: GPUTextureFormat;
+  private weatherPointCount = 0;
+  private weatherMode = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -130,9 +136,9 @@ export class GlobeRenderer {
       frame.sunDirX,     // [6]
       frame.sunDirY,     // [7]
       frame.sunDirZ,     // [8]
-      0.0,               // [9] padding
-      0.0,               // [10] padding
-      0.0,               // [11] padding
+      frame.weatherMode,       // [9]
+      frame.weatherPointCount, // [10]
+      0.0,                     // [11] padding
     ]);
   }
 
@@ -161,6 +167,10 @@ export class GlobeRenderer {
     // Create uniform buffers (48 bytes each = 12 floats for FrameData)
     this.earthTimeBuf = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     this.cloudTimeBuf = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+    this.weatherBuf = this.device.createBuffer({
+      size: GlobeRenderer.MAX_WEATHER_POINTS * 16,
+      usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+    });
 
     const createBuf = (data: Float32Array) => {
       const buf = this.device.createBuffer({ size: data.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
@@ -202,6 +212,7 @@ export class GlobeRenderer {
         { binding: 1, resource: sampler },
         { binding: 2, resource: { buffer: this.earthTimeBuf } },
         { binding: 3, resource: nightTex.createView() },
+        { binding: 4, resource: { buffer: this.weatherBuf } },
       ],
     });
 
@@ -212,6 +223,7 @@ export class GlobeRenderer {
         { binding: 1, resource: sampler },
         { binding: 2, resource: { buffer: this.cloudTimeBuf } },
         { binding: 3, resource: cloudTex.createView() },
+        { binding: 4, resource: { buffer: this.weatherBuf } },
       ],
     });
 
@@ -269,6 +281,8 @@ export class GlobeRenderer {
         sunDirX,
         sunDirY,
         sunDirZ,
+        weatherMode: this.weatherMode,
+        weatherPointCount: this.weatherPointCount,
       };
 
       this.device.queue.writeBuffer(this.earthTimeBuf, 0, this.frameDataToBuffer(earthFrame));
@@ -287,6 +301,8 @@ export class GlobeRenderer {
         sunDirX,
         sunDirY,
         sunDirZ,
+        weatherMode: this.weatherMode,
+        weatherPointCount: this.weatherPointCount,
       };
 
       this.device.queue.writeBuffer(this.cloudTimeBuf, 0, this.frameDataToBuffer(cloudFrame));
@@ -313,6 +329,13 @@ export class GlobeRenderer {
   }
 
   public updateLayerData(layerType: string, bufferData: Float32Array) {
-    console.log(`[WebGPU] Renderer received new data for ${layerType}!`, bufferData.length);
+    this.weatherMode = layerType === 'temperature' ? 1 : layerType === 'wind' ? 2 : 0;
+    this.weatherPointCount = Math.min(Math.floor(bufferData.length / 4), GlobeRenderer.MAX_WEATHER_POINTS);
+
+    if (this.weatherPointCount > 0) {
+      const uploadLength = this.weatherPointCount * 4;
+      const uploadData = uploadLength === bufferData.length ? bufferData : bufferData.subarray(0, uploadLength);
+      this.device.queue.writeBuffer(this.weatherBuf, 0, uploadData);
+    }
   }
 }
