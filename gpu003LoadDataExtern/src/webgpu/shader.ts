@@ -112,7 +112,9 @@ fn renderEarthLayer(uv: vec2<f32>, lightIntensity: f32) -> vec4<f32> {
     
     // Wind (Mode 2) wird hier nicht mehr behandelt, nur noch Temp (Mode 1)
     if (frame.weatherMode == 1.0 && frame.weatherPointCount > 0.0) {
-        finalSurfaceColor = applyHeatmap(uv);
+        let heatmap = applyHeatmap(uv);
+        // Mische die reale Satellitenkarte mit der Heatmap anhand des Alpha-Wertes (0.5)
+        finalSurfaceColor = mix(baseTextureColor, heatmap.rgb, heatmap.a);
     } else {
         lightEmission = calculateNightLights(uv, lightIntensity);
     }
@@ -130,33 +132,50 @@ fn calculateNightLights(uv: vec2<f32>, lightIntensity: f32) -> vec3<f32> {
     return vec3<f32>(cleanLights, cleanLights, cleanLights) * nightMix * vec3<f32>(1.0, 0.9, 0.7);
 }
 
-fn applyHeatmap(uv: vec2<f32>) -> vec3<f32> {
-    let pointCount = min(u32(frame.weatherPointCount), arrayLength(&weather.values));
+// Hochoptimierte O(1) Heatmap-Berechnung durch Bilineare Interpolation
+fn applyHeatmap(uv: vec2<f32>) -> vec4<f32> {
+    let maxIdx = arrayLength(&weather.values) - 1u;
+    if (maxIdx <= 0u) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+
     let lat = (0.5 - uv.y) * 180.0;
     let lon = (uv.x * 360.0) - 180.0;
 
-    var weightedTemp = 0.0;
-    var tempWeight = 0.0;
+    // Finde die exakten Indizes im 2-Grad-Raster
+    let latIdxF = (90.0 - lat) / 2.0;
+    let lonIdxF = (lon + 180.0) / 2.0;
 
-    for (var i: u32 = 0u; i < pointCount; i = i + 1u) {
-        let point = weather.values[i];
-        let dLat = abs(lat - point.latitude);
-        var dLon = abs(lon - point.longitude);
-        if (dLon > 180.0) { dLon = 360.0 - dLon; }
-        
-        let dist = length(vec2<f32>(dLat, dLon));
-        let influence = exp(-dist * 0.15); 
-        
-        weightedTemp = weightedTemp + (point.temperature * influence);
-        tempWeight = tempWeight + influence;
-    }
-
-    let avgTemp = select(15.0, weightedTemp / tempWeight, tempWeight > 0.00001);
+    // Berechne die angrenzenden Kanten (Oben, Unten, Links, Rechts)
+    let i0 = clamp(u32(floor(latIdxF)), 0u, 90u);
+    let i1 = clamp(i0 + 1u, 0u, 90u);
     
-    if (avgTemp <= 0.0) { return vec3<f32>(0.1, 0.3, 1.0); }
-    if (avgTemp <= 15.0) { return mix(vec3<f32>(0.1, 0.3, 1.0), vec3<f32>(0.1, 0.8, 0.2), avgTemp / 15.0); }
-    if (avgTemp <= 25.0) { return mix(vec3<f32>(0.1, 0.8, 0.2), vec3<f32>(1.0, 0.9, 0.1), (avgTemp - 15.0) / 10.0); }
-    if (avgTemp <= 30.0) { return mix(vec3<f32>(1.0, 0.9, 0.1), vec3<f32>(1.0, 0.2, 0.1), (avgTemp - 25.0) / 5.0); }
-    return vec3<f32>(1.0, 0.1, 0.05);
+    let j0 = u32(floor(lonIdxF)) % 180u;
+    let j1 = (j0 + 1u) % 180u; // Sorgt für einen nahtlosen Übergang bei -180 / 180 Längengrad
+
+    // Errechne die 4 Speicher-Indizes im 1D Array (Row * Width + Col)
+    let idx00 = min(i0 * 180u + j0, maxIdx);
+    let idx10 = min(i1 * 180u + j0, maxIdx);
+    let idx01 = min(i0 * 180u + j1, maxIdx);
+    let idx11 = min(i1 * 180u + j1, maxIdx);
+
+    // Lese nur diese exakten 4 Temperaturen aus dem gesamten Speicher
+    let t00 = weather.values[idx00].temperature;
+    let t10 = weather.values[idx10].temperature;
+    let t01 = weather.values[idx01].temperature;
+    let t11 = weather.values[idx11].temperature;
+
+    // Bilineares Mischen (Interpolation) für flüssige Farbübergänge ohne Kanten
+    let fracLat = fract(latIdxF);
+    let fracLon = fract(lonIdxF);
+
+    let t0 = mix(t00, t01, fracLon);
+    let t1 = mix(t10, t11, fracLon);
+    let avgTemp = mix(t0, t1, fracLat);
+    
+    // Einfache Heatmap-Ausgabe (Transparenz bleibt bei 0.5)
+    if (avgTemp <= 0.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
+    if (avgTemp <= 15.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), avgTemp / 15.0); }
+    if (avgTemp <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgTemp - 15.0) / 10.0); }
+    if (avgTemp <= 30.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgTemp - 25.0) / 5.0); }
+    return vec4<f32>(1.0, 0.1, 0.05, 0.5);
 }
-`;
+`
