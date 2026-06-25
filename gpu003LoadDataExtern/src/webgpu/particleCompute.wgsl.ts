@@ -6,8 +6,8 @@ struct FrameData {
 };
 
 struct Particle {
-    posAndAge: vec4<f32>, // xyz = Position, w = Current Age
-    velAndMax: vec4<f32>, // xyz = Letzte Bewegung, w = Max Age
+    posAndAge: vec4<f32>, 
+    velAndMax: vec4<f32>, 
 };
 
 struct WeatherPoint {
@@ -25,13 +25,11 @@ fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
     if (index >= u32(frame.particleCount)) { return; }
 
     var p = particles[index];
-    p.posAndAge.w += 1.0; // Alter erhoehen
+    p.posAndAge.w += 1.0; 
 
-    // Wenn zu alt oder auf der Rueckseite: NEU SPAWNEN
     if (p.posAndAge.w > p.velAndMax.w || isBackface(p.posAndAge.xyz)) {
         p = spawnOnFrontFace(index);
     } else {
-        // Sonst: WIND-PHYSIK ANWENDEN
         let oldPos = p.posAndAge.xyz;
         let newPos = advectParticle(oldPos);
         p.posAndAge = vec4<f32>(newPos, p.posAndAge.w);
@@ -48,8 +46,8 @@ fn isBackface(pos: vec3<f32>) -> bool {
 
 fn spawnOnFrontFace(seed: u32) -> Particle {
     var p: Particle;
-    p.posAndAge.w = 0.0; // Start Alter
-    p.velAndMax.w = 60.0 + random(seed + u32(frame.time * 1000.0)) * 60.0; // Max Alter
+    p.posAndAge.w = 0.0; 
+    p.velAndMax.w = 60.0 + random(seed + u32(frame.time * 1000.0)) * 60.0; 
     p.velAndMax.x = 0.0; p.velAndMax.y = 0.0; p.velAndMax.z = 0.0;
     
     let u = random(seed * 13u + u32(frame.time * 100.0));
@@ -58,15 +56,13 @@ fn spawnOnFrontFace(seed: u32) -> Particle {
     let phi = acos(2.0 * v - 1.0);
     
     var localPos = vec3<f32>(sin(phi) * cos(theta), cos(phi), sin(phi) * sin(theta));
-    if (localPos.z < 0.0) { localPos.z = -localPos.z; } // Zwinge auf Vorderseite
+    if (localPos.z < 0.0) { localPos.z = -localPos.z; } 
     
-    // MATHEMATIK FIX: Inverse Rotation anwenden! Zuerst Y zurückdrehen, dann X!
     p.posAndAge = vec4<f32>(rotateX(rotateY(localPos, -frame.rotY), -frame.rotX), 0.0);
     return p;
 }
 
 fn advectParticle(pos: vec3<f32>) -> vec3<f32> {
-    // MATHEMATIK FIX: Korrekte Extraktion von Lat/Lon aus der 3D-Kugel
     let lat = degrees(asin(pos.y));
     let lon = degrees(atan2(-pos.z, pos.x));
     
@@ -75,18 +71,15 @@ fn advectParticle(pos: vec3<f32>) -> vec3<f32> {
     let moveSpeed = 0.0003; 
     let newLat = clamp(lat + wind.y * moveSpeed, -89.9, 89.9); 
     
-    // Verhindert, dass Partikel am Pol extrem beschleunigen
     let cosLat = max(cos(radians(lat)), 0.1);
     var newLon = lon + (wind.x * moveSpeed) / cosLat; 
     
-    // Wrap Longitude (Wenn ein Partikel die Datumsgrenze ueberschreitet)
     if (newLon > 180.0) { newLon -= 360.0; }
     if (newLon < -180.0) { newLon += 360.0; }
     
     let radLat = radians(newLat);
     let radLon = radians(newLon);
     
-    // MATHEMATIK FIX: Korrekte Projektion von Lat/Lon zurück in den 3D-Raum
     return vec3<f32>(
         cos(radLon) * cos(radLat),
         sin(radLat),
@@ -95,11 +88,19 @@ fn advectParticle(pos: vec3<f32>) -> vec3<f32> {
 }
 
 fn getWindAt(lat: f32, lon: f32) -> vec2<f32> {
-    let latIdx = clamp(u32((90.0 - lat) / 2.0), 0u, 90u);
-    let lonIdx = clamp(u32((lon + 180.0) / 2.0), 0u, 179u);
-    let idx = latIdx * 180u + lonIdx;
+    // ANPASSUNG FÜR 5-GRAD RASTER: 
+    // Division durch 5.0, Maxima auf 36u und 71u
+    let latIdx = clamp(u32((90.0 - lat) / 5.0), 0u, 36u);
+    let lonIdx = clamp(u32((lon + 180.0) / 5.0), 0u, 71u);
     
-    let w = weather[idx];
+    // Multiplikation mit der neuen Zeilenbreite (72u statt 180u)
+    let idx = latIdx * 72u + lonIdx;
+    
+    // Sicherheitscatch
+    let maxIdx = arrayLength(&weather) - 1u;
+    let safeIdx = min(idx, maxIdx);
+    
+    let w = weather[safeIdx];
     return vec2<f32>(w.windU, w.windV);
 }
 
