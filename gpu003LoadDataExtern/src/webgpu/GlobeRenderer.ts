@@ -5,20 +5,18 @@ import { particleComputeShader } from './particleCompute.wgsl';
 import { particleRenderShader } from './particleRender.wgsl';
 
 interface FrameData {
-  time: number;
-  isCloud: number;
-  rotX: number;
-  rotY: number;
-  zoom: number;
-  aspectRatio: number;
-  sunDirX: number;
-  sunDirY: number;
-  sunDirZ: number;
-  weatherMode: number;
-  weatherPointCount: number;
+    time: number; isCloud: number; rotX: number; rotY: number; zoom: number; aspectRatio: number;
+    sunDirX: number; sunDirY: number; sunDirZ: number; weatherMode: number; weatherPointCount: number;
+    gridWidth: number;
+    latStep: number;
+    lonStep: number;
 }
 
 export class GlobeRenderer {
+  private gridWidth = 0;
+  private latStep = 0;
+  private lonStep = 0;
+
   private static readonly MAX_WEATHER_POINTS = 65536;
   private readonly PARTICLE_COUNT = 10000; // Anzahl der Partikel
   
@@ -114,22 +112,14 @@ export class GlobeRenderer {
     };
   }
 
-  private frameDataToBuffer(frame: FrameData): Float32Array {
-    return new Float32Array([
-      frame.time,        
-      frame.isCloud,     
-      frame.rotX,        
-      frame.rotY,        
-      frame.zoom,        
-      frame.aspectRatio, 
-      frame.sunDirX,     
-      frame.sunDirY,     
-      frame.sunDirZ,     
-      frame.weatherMode,       
-      frame.weatherPointCount, 
-      0.0,                     
-    ]);
-  }
+    private frameDataToBuffer(frame: FrameData): Float32Array {
+        return new Float32Array([
+            frame.time, frame.isCloud, frame.rotX, frame.rotY,
+            frame.zoom, frame.aspectRatio, frame.sunDirX, frame.sunDirY,
+            frame.sunDirZ, frame.weatherMode, frame.weatherPointCount,
+            frame.gridWidth, frame.latStep, frame.lonStep, 0.0, 0.0
+        ]);
+    }
 
   public async init() {
     this.canvas.width = this.canvas.clientWidth;
@@ -149,8 +139,8 @@ export class GlobeRenderer {
 
     const sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat' });
 
-    this.earthTimeBuf = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    this.cloudTimeBuf = this.device.createBuffer({ size: 48, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      this.earthTimeBuf = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+      this.cloudTimeBuf = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
     
     this.weatherBuf = this.device.createBuffer({
       size: GlobeRenderer.MAX_WEATHER_POINTS * 32,
@@ -288,11 +278,12 @@ export class GlobeRenderer {
       const globalRotY = rotY + (time * 0.02);
       const cloudRotY = rotY + (time * 0.03);
 
-      const earthFrame: FrameData = {
-        time, isCloud: 0.0, rotX, rotY: globalRotY, zoom, aspectRatio, 
-        sunDirX: 0.67, sunDirY: 0.0, sunDirZ: 0.13,
-        weatherMode: this.weatherMode, weatherPointCount: this.weatherPointCount,
-      };
+        const earthFrame: FrameData = {
+            time, isCloud: 0.0, rotX, rotY: globalRotY, zoom, aspectRatio,
+            sunDirX: 0.37, sunDirY: 0.8, sunDirZ: 0.83,
+            weatherMode: this.weatherMode, weatherPointCount: this.weatherPointCount,
+            gridWidth: this.gridWidth, latStep: this.latStep, lonStep: this.lonStep
+        };
       this.device.queue.writeBuffer(this.earthTimeBuf, 0, this.frameDataToBuffer(earthFrame));
 
       // --- NEU 1. COMPUTE PASS (Physik vor dem Rendern berechnen) ---
@@ -360,14 +351,18 @@ export class GlobeRenderer {
     }
   }
 
-  public updateLayerData(layerType: string, bufferData: Float32Array) {
-    this.weatherMode = layerType === 'temperature' ? 1 : layerType === 'wind' ? 2 : 0;
-    this.weatherPointCount = Math.min(Math.floor(bufferData.length / 8), GlobeRenderer.MAX_WEATHER_POINTS);
+    public updateLayerData(layerType: string, bufferData: Float32Array, gridWidth = 0, latStep = 0, lonStep = 0) {
+        this.weatherMode = layerType === 'temperature' ? 1 : layerType === 'wind' ? 2 : 0;
+        this.weatherPointCount = Math.min(Math.floor(bufferData.length / 8), GlobeRenderer.MAX_WEATHER_POINTS);
 
-    if (this.weatherPointCount > 0) {
-      const uploadLength = this.weatherPointCount * 8;
-      const uploadData = uploadLength === bufferData.length ? bufferData : bufferData.subarray(0, uploadLength);
-      this.device.queue.writeBuffer(this.weatherBuf, 0, uploadData);
+        this.gridWidth = gridWidth;
+        this.latStep = latStep;
+        this.lonStep = lonStep;
+
+        if (this.weatherPointCount > 0) {
+            const uploadLength = this.weatherPointCount * 8;
+            const uploadData = uploadLength === bufferData.length ? bufferData : bufferData.subarray(0, uploadLength);
+            this.device.queue.writeBuffer(this.weatherBuf, 0, uploadData);
+        }
     }
-  }
 }

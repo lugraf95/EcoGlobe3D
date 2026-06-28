@@ -11,7 +11,11 @@ struct FrameData {
     sunDirZ: f32,
     weatherMode: f32,
     weatherPointCount: f32,
-    pad: f32,
+    gridWidth: f32,
+    latStep: f32,
+    lonStep: f32,
+    pad1: f32,
+    pad2: f32,
 };
 
 @group(0) @binding(0) var myTexture: texture_2d<f32>;
@@ -138,23 +142,22 @@ fn applyHeatmap(uv: vec2<f32>) -> vec4<f32> {
     let lat = (0.5 - uv.y) * 180.0;
     let lon = (uv.x * 360.0) - 180.0;
 
-    let latIdxF = (90.0 - lat) / 5.0;
-    let lonIdxF = (lon + 180.0) / 5.0;
+    let latIdxF = (90.0 - lat) / frame.latStep;
+    let lonIdxF = (lon + 180.0) / frame.lonStep;
 
-    // ANPASSUNG FÜR 5-GRAD RASTER: 
-    // Max Längengrade = 360 / 5 = 72
-    // Max Breitengrade = 180 / 5 = 36
-    let i0 = clamp(u32(floor(latIdxF)), 0u, 36u);
-    let i1 = clamp(i0 + 1u, 0u, 36u);
+    let maxRows = u32(180.0 / frame.latStep); 
+    let gridCols = u32(frame.gridWidth);
+
+    let i0 = clamp(u32(floor(latIdxF)), 0u, maxRows);
+    let i1 = clamp(i0 + 1u, 0u, maxRows);
     
-    let j0 = u32(floor(lonIdxF)) % 72u;
-    let j1 = (j0 + 1u) % 72u; 
+    let j0 = u32(floor(lonIdxF)) % gridCols;
+    let j1 = (j0 + 1u) % gridCols; 
 
-    // ANPASSUNG: Zeilenbreite ist jetzt 72u (statt 180u)
-    let idx00 = min(i0 * 72u + j0, maxIdx);
-    let idx10 = min(i1 * 72u + j0, maxIdx);
-    let idx01 = min(i0 * 72u + j1, maxIdx);
-    let idx11 = min(i1 * 72u + j1, maxIdx);
+    let idx00 = min(i0 * gridCols + j0, maxIdx);
+    let idx10 = min(i1 * gridCols + j0, maxIdx);
+    let idx01 = min(i0 * gridCols + j1, maxIdx);
+    let idx11 = min(i1 * gridCols + j1, maxIdx);
 
     let t00 = weather.values[idx00].temperature;
     let t10 = weather.values[idx10].temperature;
@@ -168,10 +171,10 @@ fn applyHeatmap(uv: vec2<f32>) -> vec4<f32> {
     let t1 = mix(t10, t11, fracLon);
     let avgTemp = mix(t0, t1, fracLat);
     
-    if (avgTemp <= 0.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
-    if (avgTemp <= 15.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), avgTemp / 15.0); }
-    if (avgTemp <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgTemp - 15.0) / 10.0); }
-    if (avgTemp <= 30.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgTemp - 25.0) / 5.0); }
+    if (avgTemp <= -10.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
+    if (avgTemp <= 10.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgTemp + 10.0) / 20.0); }
+    if (avgTemp <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgTemp - 10.0) / 15.0); }
+    if (avgTemp <= 35.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgTemp - 25.0) / 10.0); }
     return vec4<f32>(1.0, 0.1, 0.05, 0.5);
 }
 `;

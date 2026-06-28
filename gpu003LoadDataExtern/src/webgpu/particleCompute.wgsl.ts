@@ -2,7 +2,8 @@ export const particleComputeShader = /*wgsl*/`
 struct FrameData { 
     time: f32, isCloud: f32, rotX: f32, rotY: f32, 
     zoom: f32, aspectRatio: f32, sunDirX: f32, sunDirY: f32, 
-    sunDirZ: f32, weatherMode: f32, particleCount: f32, pad: f32,
+    sunDirZ: f32, weatherMode: f32, weatherPointCount: f32, // <- HIER KORRIGIERT
+    gridWidth: f32, latStep: f32, lonStep: f32, pad1: f32, pad2: f32,
 };
 
 struct Particle {
@@ -22,10 +23,11 @@ struct WeatherPoint {
 @compute @workgroup_size(64)
 fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
     let index = id.x;
-    if (index >= u32(frame.particleCount)) { return; }
+    
+    if (index >= arrayLength(&particles)) { return; }
 
     var p = particles[index];
-    p.posAndAge.w += 1.0; 
+    p.posAndAge.w += 1.0;
 
     if (p.posAndAge.w > p.velAndMax.w || isBackface(p.posAndAge.xyz)) {
         p = spawnOnFrontFace(index);
@@ -87,21 +89,39 @@ fn advectParticle(pos: vec3<f32>) -> vec3<f32> {
     );
 }
 
+// Bilineare Interpolation der Winddaten basierend auf dynamischem Raster
 fn getWindAt(lat: f32, lon: f32) -> vec2<f32> {
-    // ANPASSUNG FÜR 5-GRAD RASTER: 
-    // Division durch 5.0, Maxima auf 36u und 71u
-    let latIdx = clamp(u32((90.0 - lat) / 5.0), 0u, 36u);
-    let lonIdx = clamp(u32((lon + 180.0) / 5.0), 0u, 71u);
-    
-    // Multiplikation mit der neuen Zeilenbreite (72u statt 180u)
-    let idx = latIdx * 72u + lonIdx;
-    
-    // Sicherheitscatch
     let maxIdx = arrayLength(&weather) - 1u;
-    let safeIdx = min(idx, maxIdx);
+    if (maxIdx <= 0u) { return vec2<f32>(0.0, 0.0); }
+
+    let latIdxF = (90.0 - lat) / frame.latStep;
+    let lonIdxF = (lon + 180.0) / frame.lonStep;
+
+    let maxRows = u32(180.0 / frame.latStep);
+    let gridCols = u32(frame.gridWidth);
+
+    let i0 = clamp(u32(floor(latIdxF)), 0u, maxRows);
+    let i1 = clamp(i0 + 1u, 0u, maxRows);
     
-    let w = weather[safeIdx];
-    return vec2<f32>(w.windU, w.windV);
+    let j0 = u32(floor(lonIdxF)) % gridCols;
+    let j1 = (j0 + 1u) % gridCols; 
+
+    let idx00 = min(i0 * gridCols + j0, maxIdx);
+    let idx10 = min(i1 * gridCols + j0, maxIdx);
+    let idx01 = min(i0 * gridCols + j1, maxIdx);
+    let idx11 = min(i1 * gridCols + j1, maxIdx);
+
+    let w00 = vec2<f32>(weather[idx00].windU, weather[idx00].windV);
+    let w10 = vec2<f32>(weather[idx10].windU, weather[idx10].windV);
+    let w01 = vec2<f32>(weather[idx01].windU, weather[idx01].windV);
+    let w11 = vec2<f32>(weather[idx11].windU, weather[idx11].windV);
+
+    let fracLat = fract(latIdxF);
+    let fracLon = fract(lonIdxF);
+
+    let w0 = mix(w00, w01, fracLon);
+    let w1 = mix(w10, w11, fracLon);
+    return mix(w0, w1, fracLat);
 }
 
 fn rotateX(pos: vec3<f32>, angle: f32) -> vec3<f32> {
