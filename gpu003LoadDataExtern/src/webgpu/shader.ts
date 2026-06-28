@@ -1,4 +1,4 @@
-export const shaderCode = `//wgsl
+export const shaderCode = /*wgsl*/`
 struct FrameData { 
     time: f32,          
     isCloud: f32,       
@@ -9,9 +9,13 @@ struct FrameData {
     sunDirX: f32,
     sunDirY: f32,
     sunDirZ: f32,
+    weatherMode: f32,
+    weatherPointCount: f32,
+    gridWidth: f32,
+    latStep: f32,
+    lonStep: f32,
     pad1: f32,
     pad2: f32,
-    pad3: f32,
 };
 
 @group(0) @binding(0) var myTexture: texture_2d<f32>;
@@ -19,71 +23,158 @@ struct FrameData {
 @group(0) @binding(2) var<uniform> frame: FrameData;
 @group(0) @binding(3) var nightTexture: texture_2d<f32>;
 
+struct WeatherPoint {
+    latitude: f32,
+    longitude: f32,
+    temperature: f32,
+    windU: f32,
+    windV: f32,
+    pad1: f32,
+    pad2: f32,
+    pad3: f32,
+};
+
+struct WeatherData {
+    values: array<WeatherPoint>,
+};
+
+@group(0) @binding(4) var<storage, read> weather: WeatherData;
+
+struct VertexInput {
+    @location(0) position: vec4<f32>,
+    @location(1) normal: vec4<f32>,
+    @location(2) uv: vec2<f32>,
+};
+
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) normal: vec3<f32>,
 };
 
-fn rotateY(pos: vec3<f32>, angle: f32) -> vec3<f32> {
-    let s = sin(angle); let c = cos(angle);
-    return vec3<f32>(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+@vertex
+fn vertexMain(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
+    out.uv = in.uv; 
+    let rotatedPosition = applyRotation(in.position.xyz);
+    out.position = calculateScreenPosition(rotatedPosition);
+    out.normal = applyRotation(in.normal.xyz);
+    return out;
 }
+
+fn applyRotation(pos: vec3<f32>) -> vec3<f32> {
+    var rotated = rotateY(pos, frame.rotY);
+    return rotateX(rotated, frame.rotX);
+}
+
 fn rotateX(pos: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
     return vec3<f32>(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
 }
 
-@vertex
-fn vertexMain(@location(0) pos: vec3<f32>) -> VertexOutput {
-    var out: VertexOutput;
-    
-    let pure_pos = normalize(pos);
-    out.uv = vec2<f32>(
-        0.5 + (atan2(pure_pos.z, pure_pos.x) / (2.0 * 3.14159265)),
-        0.5 - (asin(clamp(pure_pos.y, -0.99, 0.99)) / 3.14159265)
-    );
+fn rotateY(pos: vec3<f32>, angle: f32) -> vec3<f32> {
+    let s = sin(angle); let c = cos(angle);
+    return vec3<f32>(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+}
 
-    var rotated_pos = rotateX(pure_pos, frame.rotX);
-    rotated_pos = rotateY(rotated_pos, frame.rotY);
-    
+fn calculateScreenPosition(pos: vec3<f32>) -> vec4<f32> {
     let scale = (0.6 + (frame.isCloud * 0.005)) * frame.zoom;
     let zOffset = frame.isCloud * 0.009;
-    out.position = vec4<f32>((rotated_pos.x * scale) / frame.aspectRatio, rotated_pos.y * scale, (rotated_pos.z * 0.1) + 0.5 - zOffset, 1.0);
-    out.normal = rotated_pos; 
-    
-    return out;
+    return vec4<f32>((pos.x * scale) / frame.aspectRatio, pos.y * scale, (pos.z * 0.1) + 0.5 - zOffset, 1.0);
 }
 
 @fragment
 fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
-    let n = normalize(in.normal);
-    
-    let texColor = textureSample(myTexture, mySampler, in.uv);
-    var baseColor = texColor.rgb;
-    var alpha = 1.0; 
-    
-    let sunVec = vec3<f32>(frame.sunDirX, frame.sunDirY, frame.sunDirZ);
-    let lightIntensity = dot(n, normalize(sunVec));
-    var emission = vec3<f32>(0.0, 0.0, 0.0); 
+    let normal = normalize(in.normal);
+    let lightIntensity = calculateLightIntensity(normal);
     
     if (frame.isCloud > 0.5) {
-        let brightness = max(texColor.r, max(texColor.g, texColor.b));
-        if (brightness < 0.02) { discard; }
-        alpha = brightness; 
-        baseColor = vec3<f32>(1.0, 1.0, 1.0); 
+        return renderCloudLayer(in.uv, lightIntensity);
+    }
+    return renderEarthLayer(in.uv, lightIntensity);
+}
+
+fn calculateLightIntensity(normal: vec3<f32>) -> f32 {
+    let sunVec = normalize(vec3<f32>(frame.sunDirX, frame.sunDirY, frame.sunDirZ));
+    return dot(normal, sunVec);
+}
+
+fn renderCloudLayer(uv: vec2<f32>, lightIntensity: f32) -> vec4<f32> {
+    let texColor = textureSample(myTexture, mySampler, uv);
+    let brightness = max(texColor.r, max(texColor.g, texColor.b));
+    if (brightness < 0.02) { discard; }
+    
+    let alpha = brightness * 0.8; 
+    let finalLight = max(lightIntensity, 0.02);
+    return vec4<f32>(vec3<f32>(1.0, 1.0, 1.0) * finalLight, alpha);
+}
+
+fn renderEarthLayer(uv: vec2<f32>, lightIntensity: f32) -> vec4<f32> {
+    let baseTextureColor = textureSample(myTexture, mySampler, uv).rgb;
+    var finalSurfaceColor = baseTextureColor;
+    var lightEmission = vec3<f32>(0.0, 0.0, 0.0);
+    
+    if (frame.weatherMode == 1.0 && frame.weatherPointCount > 0.0) {
+        let heatmap = applyHeatmap(uv);
+        finalSurfaceColor = mix(baseTextureColor, heatmap.rgb, heatmap.a);
     } else {
-        let nightColor = textureSample(nightTexture, mySampler, in.uv).rgb;
-        
-        let cityBrightness = max(nightColor.r, max(nightColor.g, nightColor.b));
-        let cleanLights = smoothstep(0.09, 1.3, cityBrightness);
-        let nightMix = 1.0 - smoothstep(-0.2, 0.1, lightIntensity);
-        emission = vec3<f32>(cleanLights, cleanLights, cleanLights) * nightMix * vec3<f32>(1.0, 0.9, 0.7);
+        lightEmission = calculateNightLights(uv, lightIntensity);
     }
     
     let finalLight = max(lightIntensity, 0.02);
-    let litColor = (baseColor * finalLight) + emission;
+    let litColor = (finalSurfaceColor * finalLight) + lightEmission;
+    return vec4<f32>(litColor, 1.0);
+}
+
+fn calculateNightLights(uv: vec2<f32>, lightIntensity: f32) -> vec3<f32> {
+    let nightColor = textureSample(nightTexture, mySampler, uv).rgb;
+    let cityBrightness = max(nightColor.r, max(nightColor.g, nightColor.b));
+    let cleanLights = smoothstep(0.09, 1.3, cityBrightness);
+    let nightMix = 1.0 - smoothstep(-0.2, 0.1, lightIntensity);
+    return vec3<f32>(cleanLights, cleanLights, cleanLights) * nightMix * vec3<f32>(1.0, 0.9, 0.7);
+}
+
+// Hochoptimierte O(1) Heatmap-Berechnung durch Bilineare Interpolation
+fn applyHeatmap(uv: vec2<f32>) -> vec4<f32> {
+    let maxIdx = arrayLength(&weather.values) - 1u;
+    if (maxIdx <= 0u) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+
+    let lat = (0.5 - uv.y) * 180.0;
+    let lon = (uv.x * 360.0) - 180.0;
+
+    let latIdxF = (90.0 - lat) / frame.latStep;
+    let lonIdxF = (lon + 180.0) / frame.lonStep;
+
+    let maxRows = u32(180.0 / frame.latStep); 
+    let gridCols = u32(frame.gridWidth);
+
+    let i0 = clamp(u32(floor(latIdxF)), 0u, maxRows);
+    let i1 = clamp(i0 + 1u, 0u, maxRows);
     
-    return vec4<f32>(litColor, alpha);
+    let j0 = u32(floor(lonIdxF)) % gridCols;
+    let j1 = (j0 + 1u) % gridCols; 
+
+    let idx00 = min(i0 * gridCols + j0, maxIdx);
+    let idx10 = min(i1 * gridCols + j0, maxIdx);
+    let idx01 = min(i0 * gridCols + j1, maxIdx);
+    let idx11 = min(i1 * gridCols + j1, maxIdx);
+
+    let t00 = weather.values[idx00].temperature;
+    let t10 = weather.values[idx10].temperature;
+    let t01 = weather.values[idx01].temperature;
+    let t11 = weather.values[idx11].temperature;
+
+    let fracLat = fract(latIdxF);
+    let fracLon = fract(lonIdxF);
+
+    let t0 = mix(t00, t01, fracLon);
+    let t1 = mix(t10, t11, fracLon);
+    let avgTemp = mix(t0, t1, fracLat);
+    
+    if (avgTemp <= -10.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
+    if (avgTemp <= 10.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgTemp + 10.0) / 20.0); }
+    if (avgTemp <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgTemp - 10.0) / 15.0); }
+    if (avgTemp <= 35.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgTemp - 25.0) / 10.0); }
+    return vec4<f32>(1.0, 0.1, 0.05, 0.5);
 }
 `;

@@ -24,9 +24,9 @@ export function App() {
     const loadDataForLayer = async (layer: string) => {
         setIsLoading(true);
         try {
-            const dataBuffer = await fetchWeatherData(layer);
+            const data = await fetchWeatherData(layer);
             if (rendererRef.current) {
-                rendererRef.current.updateLayerData(layer, dataBuffer);
+                rendererRef.current.updateLayerData(layer, data.buffer, data.cols, data.latStep, data.lonStep);
             }
         } catch (err) {
             console.error(`Failed to load data for layer "${layer}".`, err);
