@@ -33,7 +33,7 @@ fn vertexMain(@builtin(instance_index) instanceIdx: u32, @builtin(vertex_index) 
         alphaMod = 0.0; 
     }
     
-    let rotatedPos = rotateY(rotateX(drawPos, frame.rotX), frame.rotY);
+    let rotatedPos = rotateX(rotateY(drawPos, frame.rotY), frame.rotX);
     let scale = 0.605 * frame.zoom; 
     
     out.position = vec4<f32>((rotatedPos.x * scale) / frame.aspectRatio, rotatedPos.y * scale, (rotatedPos.z * 0.1) + 0.5 - 0.012, 1.0);

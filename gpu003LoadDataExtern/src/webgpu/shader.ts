@@ -63,8 +63,8 @@ fn vertexMain(in: VertexInput) -> VertexOutput {
 }
 
 fn applyRotation(pos: vec3<f32>) -> vec3<f32> {
-    var rotated = rotateX(pos, frame.rotX);
-    return rotateY(rotated, frame.rotY);
+    var rotated = rotateY(pos, frame.rotY);
+    return rotateX(rotated, frame.rotX);
 }
 
 fn rotateX(pos: vec3<f32>, angle: f32) -> vec3<f32> {

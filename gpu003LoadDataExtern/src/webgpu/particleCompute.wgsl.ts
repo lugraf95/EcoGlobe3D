@@ -42,7 +42,7 @@ fn computeMain(@builtin(global_invocation_id) id: vec3<u32>) {
 }
 
 fn isBackface(pos: vec3<f32>) -> bool {
-    let rotatedPos = rotateY(rotateX(pos, frame.rotX), frame.rotY);
+    let rotatedPos = rotateX(rotateY(pos, frame.rotY), frame.rotX);
     return rotatedPos.z < -0.1; 
 }
 
@@ -60,7 +60,7 @@ fn spawnOnFrontFace(seed: u32) -> Particle {
     var localPos = vec3<f32>(sin(phi) * cos(theta), cos(phi), sin(phi) * sin(theta));
     if (localPos.z < 0.0) { localPos.z = -localPos.z; } 
     
-    p.posAndAge = vec4<f32>(rotateX(rotateY(localPos, -frame.rotY), -frame.rotX), 0.0);
+    p.posAndAge = vec4<f32>(rotateY(rotateX(localPos, -frame.rotX), -frame.rotY), 0.0);
     return p;
 }
 
