@@ -29,7 +29,7 @@ struct WeatherPoint {
     temperature: f32,
     windU: f32,
     windV: f32,
-    pad1: f32,
+    airQuality: f32,
     pad2: f32,
     pad3: f32,
 };
@@ -114,8 +114,8 @@ fn renderEarthLayer(uv: vec2<f32>, lightIntensity: f32) -> vec4<f32> {
     var finalSurfaceColor = baseTextureColor;
     var lightEmission = vec3<f32>(0.0, 0.0, 0.0);
     
-    if (frame.weatherMode == 1.0 && frame.weatherPointCount > 0.0) {
-        let heatmap = applyHeatmap(uv);
+    if ((frame.weatherMode == 1.0 || frame.weatherMode == 3.0) && frame.weatherPointCount > 0.0) {
+        let heatmap = applyHeatmap(uv, frame.weatherMode);
         finalSurfaceColor = mix(baseTextureColor, heatmap.rgb, heatmap.a);
     } else {
         lightEmission = calculateNightLights(uv, lightIntensity);
@@ -135,7 +135,7 @@ fn calculateNightLights(uv: vec2<f32>, lightIntensity: f32) -> vec3<f32> {
 }
 
 // Hochoptimierte O(1) Heatmap-Berechnung durch Bilineare Interpolation
-fn applyHeatmap(uv: vec2<f32>) -> vec4<f32> {
+fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
     let maxIdx = arrayLength(&weather.values) - 1u;
     if (maxIdx <= 0u) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
 
@@ -159,22 +159,41 @@ fn applyHeatmap(uv: vec2<f32>) -> vec4<f32> {
     let idx01 = min(i0 * gridCols + j1, maxIdx);
     let idx11 = min(i1 * gridCols + j1, maxIdx);
 
-    let t00 = weather.values[idx00].temperature;
-    let t10 = weather.values[idx10].temperature;
-    let t01 = weather.values[idx01].temperature;
-    let t11 = weather.values[idx11].temperature;
+    var v00: f32; var v10: f32; var v01: f32; var v11: f32;
+
+    if (mode == 1.0) {
+        v00 = weather.values[idx00].temperature;
+        v10 = weather.values[idx10].temperature;
+        v01 = weather.values[idx01].temperature;
+        v11 = weather.values[idx11].temperature;
+    } else {
+        v00 = weather.values[idx00].airQuality;
+        v10 = weather.values[idx10].airQuality;
+        v01 = weather.values[idx01].airQuality;
+        v11 = weather.values[idx11].airQuality;
+    }
 
     let fracLat = fract(latIdxF);
     let fracLon = fract(lonIdxF);
 
-    let t0 = mix(t00, t01, fracLon);
-    let t1 = mix(t10, t11, fracLon);
-    let avgTemp = mix(t0, t1, fracLat);
+    let t0 = mix(v00, v01, fracLon);
+    let t1 = mix(v10, v11, fracLon);
+    let avgVal = mix(t0, t1, fracLat);
     
-    if (avgTemp <= -10.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
-    if (avgTemp <= 10.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgTemp + 10.0) / 20.0); }
-    if (avgTemp <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgTemp - 10.0) / 15.0); }
-    if (avgTemp <= 35.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgTemp - 25.0) / 10.0); }
-    return vec4<f32>(1.0, 0.1, 0.05, 0.5);
+    if (mode == 1.0) {
+        // Temperatur-Skala (-10°C bis 35°C)
+        if (avgVal <= -10.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
+        if (avgVal <= 10.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgVal + 10.0) / 20.0); }
+        if (avgVal <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgVal - 10.0) / 15.0); }
+        if (avgVal <= 35.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 25.0) / 10.0); }
+        return vec4<f32>(1.0, 0.1, 0.05, 0.5);
+    } else {
+        // Luftqualität (AQI) Skala (0: Gut bis 80+: Sehr Schlecht) - Nimmt denselben Farbverlauf!
+        if (avgVal <= 20.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
+        if (avgVal <= 40.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgVal - 20.0) / 20.0); }
+        if (avgVal <= 60.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgVal - 40.0) / 20.0); }
+        if (avgVal <= 80.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 60.0) / 20.0); }
+        return vec4<f32>(1.0, 0.1, 0.05, 0.5);
+    }
 }
 `;

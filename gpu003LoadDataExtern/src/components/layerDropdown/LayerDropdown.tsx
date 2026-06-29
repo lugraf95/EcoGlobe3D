@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Globe, Thermometer, Wind, Lightbulb, Sliders, ChevronUp, ChevronDown } from 'lucide-react';
+import { Globe, Thermometer, Wind, CloudFog, Sliders, ChevronUp, ChevronDown } from 'lucide-react';
 import './LayerDropdown.css';
 
 interface LayerDropdownProps {
@@ -7,7 +7,7 @@ interface LayerDropdownProps {
     onLayerChange: (layerId: string) => void;
 }
 
-type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'light';
+type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'air_quality';
 
 export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps) {
     const [isLayersExpanded, setIsLayersExpanded] = useState(true);
@@ -32,10 +32,10 @@ export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps
             desc: 'Echtzeit Windgeschwindigkeiten mit simulierten Wirbelstürmen über Meeren.',
         },
         {
-            id: 'light' as ClimateLayer,
-            name: 'Lichtverschmutzung',
-            icon: Lightbulb,
-            desc: 'Verschmutzung der Dunkelheit durch insbesondere künstliche Lichtquellen.',
+            id: 'air_quality' as ClimateLayer,
+            name: 'Luftqualität',
+            icon: CloudFog,
+            desc: 'Globale Luftqualität (AQI) und Feinstaubbelastung in Echtzeit.',
         }
     ];
 

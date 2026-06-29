@@ -352,7 +352,7 @@ export class GlobeRenderer {
   }
 
     public updateLayerData(layerType: string, bufferData: Float32Array, gridWidth = 0, latStep = 0, lonStep = 0) {
-        this.weatherMode = layerType === 'temperature' ? 1 : layerType === 'wind' ? 2 : 0;
+        this.weatherMode = layerType === 'temperature' ? 1 : layerType === 'wind' ? 2 : layerType === 'air_quality' ? 3 : 0;
         this.weatherPointCount = Math.min(Math.floor(bufferData.length / 8), GlobeRenderer.MAX_WEATHER_POINTS);
 
         this.gridWidth = gridWidth;

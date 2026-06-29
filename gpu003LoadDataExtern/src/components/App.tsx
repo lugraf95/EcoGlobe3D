@@ -14,7 +14,7 @@ export function App() {
     const { layerId } = useParams();
     const navigate = useNavigate();
 
-    const validLayers = ['normal', 'temperature', 'wind', 'light'];
+    const validLayers = ['normal', 'temperature', 'wind', 'air_quality'];
 
     const activeLayer = layerId || 'normal';
 

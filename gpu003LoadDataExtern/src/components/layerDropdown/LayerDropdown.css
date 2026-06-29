@@ -156,6 +156,6 @@
 .layer-btn.wind:hover { background-color: var(--color-emerald-bg-hover); }
 .layer-btn.wind.active { background-color: var(--color-emerald-bg-active); color: var(--color-emerald-text); border-color: var(--color-emerald-border-active); box-shadow: 0 0 0 0.0625rem var(--color-emerald-shadow); }
 
-.layer-btn.light { color: var(--color-rose-text); border-color: var(--color-rose-border); background-color: var(--color-rose-bg); }
-.layer-btn.light:hover { background-color: var(--color-rose-bg-hover); }
-.layer-btn.light.active { background-color: var(--color-rose-bg-active); color: var(--color-rose-text); border-color: var(--color-rose-border-active); box-shadow: 0 0 0 0.0625rem var(--color-rose-shadow); }
+.layer-btn.air_quality { color: var(--color-rose-text); border-color: var(--color-rose-border); background-color: var(--color-rose-bg); }
+.layer-btn.air_quality:hover { background-color: var(--color-rose-bg-hover); }
+.layer-btn.air_quality.active { background-color: var(--color-rose-bg-active); color: var(--color-rose-text); border-color: var(--color-rose-border-active); box-shadow: 0 0 0 0.0625rem var(--color-rose-shadow); }

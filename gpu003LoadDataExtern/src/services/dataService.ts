@@ -1,4 +1,4 @@
-export type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'light';
+export type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'air_quality';;
 
 const API_BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 
@@ -59,17 +59,28 @@ async function performGlobalWeatherDownload(): Promise<GridData> {
         await Promise.all(batch.map(async (chunk) => {
             const latString = chunk.map(c => c.lat.toFixed(2)).join(',');
             const lonString = chunk.map(c => c.lon.toFixed(2)).join(',');
-            const url = `${API_BASE_URL}?latitude=${latString}&longitude=${lonString}&current=temperature_2m,wind_u_component_10m,wind_v_component_10m`;
+            
+            // Beide APIs parallel abrufen (Wetter + Air Quality)
+            const weatherUrl = `${API_BASE_URL}?latitude=${latString}&longitude=${lonString}&current=temperature_2m,wind_u_component_10m,wind_v_component_10m`;
+            const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latString}&longitude=${lonString}&current=european_aqi`;
 
             try {
-                const response = await fetch(url);
-                const data = await response.json();
-                const dataArray = Array.isArray(data) ? data : [data];
+                const [weatherRes, aqiRes] = await Promise.all([
+                    fetch(weatherUrl),
+                    fetch(aqiUrl)
+                ]);
+                
+                const weatherData = await weatherRes.json();
+                const aqiData = await aqiRes.json();
+                
+                const weatherArray = Array.isArray(weatherData) ? weatherData : [weatherData];
+                const aqiArray = Array.isArray(aqiData) ? aqiData : [aqiData];
 
                 for (let j = 0; j < chunk.length; j++) {
-                    buffer[chunk[j].index + 2] = dataArray[j]?.current?.temperature_2m ?? 0.0;
-                    buffer[chunk[j].index + 3] = dataArray[j]?.current?.wind_u_component_10m ?? 0.0;
-                    buffer[chunk[j].index + 4] = dataArray[j]?.current?.wind_v_component_10m ?? 0.0;
+                    buffer[chunk[j].index + 2] = weatherArray[j]?.current?.temperature_2m ?? 0.0;
+                    buffer[chunk[j].index + 3] = weatherArray[j]?.current?.wind_u_component_10m ?? 0.0;
+                    buffer[chunk[j].index + 4] = weatherArray[j]?.current?.wind_v_component_10m ?? 0.0;
+                    buffer[chunk[j].index + 5] = aqiArray[j]?.current?.european_aqi ?? 0.0; // AQI wandert exakt in den freien pad1 Speicherplatz!
                 }
             } catch (error) {
                 console.error(`[API] Fehler:`, error);
@@ -82,7 +93,8 @@ async function performGlobalWeatherDownload(): Promise<GridData> {
 }
 
 export async function fetchWeatherData(layerType: string): Promise<GridData> {
-    if (layerType === 'normal' || layerType === 'light') {
+    // Normal fängt ab jetzt ab, 'light' wurde entfernt
+    if (layerType === 'normal') {
         return { buffer: new Float32Array(0), cols: 0, latStep: 0, lonStep: 0 };
     }
     if (cachedGlobalWeatherBuffer) return cachedGlobalWeatherBuffer;
