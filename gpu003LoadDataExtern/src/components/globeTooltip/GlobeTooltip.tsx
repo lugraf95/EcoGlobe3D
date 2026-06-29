@@ -36,14 +36,12 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
                 return;
             }
 
-            // 3D-Koordinaten über deine Methode in GlobeRenderer abfragen
             const coords = rendererRef.current.getLatLonFromScreen(e.clientX, e.clientY);
             if (!coords) {
-                setTooltip(null); // Klick ging daneben (ins All)
+                setTooltip(null);
                 return;
             }
 
-            // Index im Daten-Grid ermitteln
             const maxRows = Math.floor(180 / currentData.latStep);
             let latIdx = Math.round((90 - coords.lat) / currentData.latStep);
             let lonIdx = Math.round((coords.lon + 180) / currentData.lonStep);
@@ -66,6 +64,9 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
                 const v = currentData.buffer[pointIndex + 4];
                 const speed = Math.sqrt(u * u + v * v);
                 valueText += `Windgeschw.: ${speed.toFixed(1)} km/h`;
+            } else if (activeLayer === 'air_quality') {
+                const aqi = currentData.buffer[pointIndex + 5];
+                valueText += `Luftqualität (AQI): ${Math.round(aqi)}`;
             }
 
             setTooltip({
@@ -75,10 +76,7 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
             });
         };
 
-        // Event-Listener direkt an das Canvas binden
         canvas.addEventListener('click', handleCanvasClick);
-
-        // Tooltip automatisch schließen, wenn sich der Layer oder die Daten ändern
         setTooltip(null);
 
         return () => {
