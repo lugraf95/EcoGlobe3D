@@ -405,9 +405,13 @@ export class GlobeRenderer {
         const origY = y1;
         const origZ = -rotatedX * sy + z1 * cy;
 
-        // 5. Umwandlung des 3D Vektors in Latitude und Longitude
         const lat = Math.asin(origY) * (180 / Math.PI);
-        const lon = Math.atan2(origX, origZ) * (180 / Math.PI);
+
+        let theta = Math.atan2(origZ, -origX);
+        if (theta < 0) theta += 2 * Math.PI;
+
+        // Theta in Längengrad (-180 bis 180) umrechnen
+        const lon = (theta / (2 * Math.PI) * 360.0) - 180.0;
 
         return { lat, lon };
     }
