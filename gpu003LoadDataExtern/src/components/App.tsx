@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { GlobeRenderer } from '../webgpu/GlobeRenderer';
-import { fetchWeatherData } from '../services/dataService';
+import { fetchWeatherData, type GridData } from '../services/dataService';
 
 import { LayerDropdown } from './layerDropdown/LayerDropdown.tsx';
-import './App.css';
 import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
+import { GlobeTooltip } from './globeTooltip/GlobeTooltip.tsx';
+import './App.css';
 
 export function App() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -15,16 +16,17 @@ export function App() {
     const navigate = useNavigate();
 
     const validLayers = ['normal', 'temperature', 'wind', 'air_quality'];
-
     const activeLayer = layerId || 'normal';
 
     const [isLoading, setIsLoading] = useState<boolean>(true);
     const [isEngineReady, setIsEngineReady] = useState<boolean>(false);
+    const [currentData, setCurrentData] = useState<GridData | null>(null);
 
     const loadDataForLayer = async (layer: string) => {
         setIsLoading(true);
         try {
             const data = await fetchWeatherData(layer);
+            setCurrentData(data);
             if (rendererRef.current) {
                 rendererRef.current.updateLayerData(layer, data.buffer, data.cols, data.latStep, data.lonStep);
             }
@@ -90,6 +92,13 @@ export function App() {
 
             {isLoading && <LoadingSpinner />}
             <canvas ref={canvasRef} className="globe-canvas" />
+
+            <GlobeTooltip
+                canvasRef={canvasRef}
+                rendererRef={rendererRef}
+                activeLayer={activeLayer}
+                currentData={currentData}
+            />
         </div>
     );
 }

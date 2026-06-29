@@ -36,6 +36,8 @@ export class GlobeRenderer {
   private cloudTimeBuf!: GPUBuffer;
   private weatherBuf!: GPUBuffer;
 
+  private currentTime: number = 0;
+
   // --- NEU: Partikel-System Variablen ---
   private particleBuffer!: GPUBuffer;
   private particleComputePipeline!: GPUComputePipeline;
@@ -269,6 +271,7 @@ export class GlobeRenderer {
   public start() {
     const render = (now: number) => {
       const time = now / 1000.0;
+      this.currentTime = time;
       const encoder = this.device.createCommandEncoder();
       
       const rotX = this.inputController.rotX;
@@ -364,5 +367,48 @@ export class GlobeRenderer {
             const uploadData = uploadLength === bufferData.length ? bufferData : bufferData.subarray(0, uploadLength);
             this.device.queue.writeBuffer(this.weatherBuf, 0, uploadData);
         }
+    }
+
+    public getLatLonFromScreen(clientX: number, clientY: number): { lat: number, lon: number } | null {
+        if (!this.inputController) return null;
+
+        const rect = this.canvas.getBoundingClientRect();
+
+        // 1. Klick in NDC (Normalized Device Coordinates) umwandeln [-1, 1]
+        const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+        const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1); // WebGPU Y ist nach oben positiv
+        const aspectRatio = rect.width / rect.height;
+
+        // Aktuelle Kamerawerte
+        const rotX = this.inputController.rotX;
+        const globalRotY = this.inputController.rotY + (this.currentTime * 0.02);
+        const scale = 0.6 * this.inputController.zoom;
+
+        // 2. Rückrechnung auf die X/Y Position der gedrehten Kugel
+        const rotatedX = (ndcX * aspectRatio) / scale;
+        const rotatedY = ndcY / scale;
+
+        // Klick außerhalb der Kugel? (Radius ist 1.0)
+        const radiusSq = rotatedX * rotatedX + rotatedY * rotatedY;
+        if (radiusSq > 1.0) return null;
+
+        // 3. Z-Koordinate auf der Kugeloberfläche berechnen
+        const rotatedZ = Math.sqrt(1.0 - radiusSq);
+
+        // 4. Inverse Rotationsmatrizen anwenden (erst X, dann Y rückgängig machen)
+        const sx = Math.sin(-rotX), cx = Math.cos(-rotX);
+        const y1 = rotatedY * cx - rotatedZ * sx;
+        const z1 = rotatedY * sx + rotatedZ * cx;
+
+        const sy = Math.sin(-globalRotY), cy = Math.cos(-globalRotY);
+        const origX = rotatedX * cy + z1 * sy;
+        const origY = y1;
+        const origZ = -rotatedX * sy + z1 * cy;
+
+        // 5. Umwandlung des 3D Vektors in Latitude und Longitude
+        const lat = Math.asin(origY) * (180 / Math.PI);
+        const lon = Math.atan2(origX, origZ) * (180 / Math.PI);
+
+        return { lat, lon };
     }
 }
