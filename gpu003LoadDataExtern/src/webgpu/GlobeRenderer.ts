@@ -17,9 +17,21 @@ export class GlobeRenderer {
   private latStep = 0;
   private lonStep = 0;
 
+  // NEU: Instanzvariablen für die Sonnenrichtung mit deinen Standardwerten
+  private sunDirX = 0.37;
+  private sunDirY = 0.8;
+  private sunDirZ = 0.83;
+
+  // NEU: Öffentliche Methode zum Aktualisieren der Werte aus der UI
+  public setSunDirection(x: number, y: number, z: number) {
+    this.sunDirX = x;
+    this.sunDirY = y;
+    this.sunDirZ = z;
+  }
+
   private static readonly MAX_WEATHER_POINTS = 65536;
   private readonly PARTICLE_COUNT = 10000; // Anzahl der Partikel
-  
+
   private canvas: HTMLCanvasElement;
   private device!: GPUDevice;
   private context!: GPUCanvasContext;
@@ -27,7 +39,7 @@ export class GlobeRenderer {
   private depthTexture!: GPUTexture;
   private earthBG!: GPUBindGroup;
   private cloudBG!: GPUBindGroup;
-  
+
   private vertexBuf!: GPUBuffer;
   private indexBuf!: GPUBuffer;
   private indexCount: number = 0;
@@ -143,17 +155,17 @@ export class GlobeRenderer {
 
       this.earthTimeBuf = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       this.cloudTimeBuf = this.device.createBuffer({ size: 64, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-    
+
     this.weatherBuf = this.device.createBuffer({
       size: GlobeRenderer.MAX_WEATHER_POINTS * 32,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
 
     const sphereData = this.createSphere(1.0, 64, 64);
-    
+
     this.vertexBuf = this.device.createBuffer({ size: sphereData.vertices.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
     this.device.queue.writeBuffer(this.vertexBuf, 0, sphereData.vertices);
-    
+
     this.indexBuf = this.device.createBuffer({ size: sphereData.indices.byteLength, usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST });
     this.device.queue.writeBuffer(this.indexBuf, 0, sphereData.indices);
     this.indexCount = sphereData.indices.length;
@@ -163,13 +175,13 @@ export class GlobeRenderer {
       vertex: {
         module: this.device.createShaderModule({ code: shaderCode }),
         entryPoint: 'vertexMain',
-        buffers: [{ 
+        buffers: [{
           arrayStride: 40,
           attributes: [
             { shaderLocation: 0, offset: 0, format: 'float32x4' },
             { shaderLocation: 1, offset: 16, format: 'float32x4' },
             { shaderLocation: 2, offset: 32, format: 'float32x2' }
-          ] 
+          ]
         }],
       },
       fragment: {
@@ -225,7 +237,7 @@ export class GlobeRenderer {
   private async initParticleSystem() {
     // 32 Bytes pro Partikel (2x vec4<f32>)
     this.particleBuffer = this.device.createBuffer({
-      size: this.PARTICLE_COUNT * 32, 
+      size: this.PARTICLE_COUNT * 32,
       usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
     });
 
@@ -239,7 +251,7 @@ export class GlobeRenderer {
     this.particleRenderPipeline = this.device.createRenderPipeline({
       layout: 'auto',
       vertex: { module: renderModule, entryPoint: 'vertexMain' },
-      fragment: { 
+      fragment: {
         module: renderModule, entryPoint: 'fragmentMain',
         // Additive Blending fuer leuchtende Stroeme
         targets: [{ format: this.format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one' }, alpha: {} } }]
@@ -283,7 +295,7 @@ export class GlobeRenderer {
 
         const earthFrame: FrameData = {
             time, isCloud: 0.0, rotX, rotY: globalRotY, zoom, aspectRatio,
-            sunDirX: 0.37, sunDirY: 0.8, sunDirZ: 0.83,
+            sunDirX: this.sunDirX, sunDirY: this.sunDirY, sunDirZ: this.sunDirZ,
             weatherMode: this.weatherMode, weatherPointCount: this.weatherPointCount,
             gridWidth: this.gridWidth, latStep: this.latStep, lonStep: this.lonStep
         };

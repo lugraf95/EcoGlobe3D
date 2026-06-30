@@ -8,6 +8,8 @@ import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
 import { GlobeTooltip } from './globeTooltip/GlobeTooltip.tsx';
 // NEU: Import der Legenden-Komponente
 import { Legend } from './legend/Legend.tsx';
+// NEU: Import der Sonnen-Steuerung
+import { SunControls } from './sunControls/SunControls.tsx';
 import './App.css';
 
 export function App() {
@@ -101,6 +103,9 @@ export function App() {
                 activeLayer={activeLayer}
                 currentData={currentData}
             />
+
+            {/* NEU: Die Slider unten links platzieren */}
+            <SunControls rendererRef={rendererRef} />
 
             {/* NEU: Einbinden der Legende auf der rechten Seite */}
             <Legend activeLayer={activeLayer} />
