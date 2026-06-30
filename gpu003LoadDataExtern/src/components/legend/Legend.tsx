@@ -49,7 +49,7 @@ export function Legend({ activeLayer }: LegendProps) {
     if (!data) return null;
 
     return (
-        <div className="legend-container">
+        <div className={`legend-container ${activeLayer}`}>
             <h3 className="legend-title">{data.title}</h3>
             <div className="legend-content">
                 {data.type === 'animation' ? (

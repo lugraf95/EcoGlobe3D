@@ -104,10 +104,8 @@ export function App() {
                 currentData={currentData}
             />
 
-            {/* NEU: Die Slider unten links platzieren */}
             <SunControls rendererRef={rendererRef} />
 
-            {/* NEU: Einbinden der Legende auf der rechten Seite */}
             <Legend activeLayer={activeLayer} />
         </div>
     );

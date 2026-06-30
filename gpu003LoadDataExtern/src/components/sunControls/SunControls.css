@@ -1,49 +1,57 @@
 .sun-controls-panel {
     position: absolute;
-    left: 24px;
-    bottom: 24px;
-    background-color: var(--color-slate-bg, rgba(15, 23, 42, 0.65));
-    border: 1px solid var(--color-slate-border, rgba(30, 41, 59, 0.6));
-    border-radius: 12px;
-    padding: 16px 20px;
-    color: var(--color-slate-text, #cbd5e1);
-    font-family: inherit;
+    left: 1.5rem;
+    bottom: 1.5rem;
     z-index: 10;
-    backdrop-filter: blur(8px);
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    min-width: 220px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    gap: 0.75rem;
+    min-width: 14rem;
+
+    background-color: var(--color-slate-bg);
+    backdrop-filter: blur(0.75rem);
+    border: 0.0625rem solid var(--color-slate-border);
+    border-radius: 1rem;
+    box-shadow: 0 1.25rem 1.5625rem -0.3125rem var(--color-black-shadow);
+    padding: 1rem 1.25rem;
+
+    font-family: ui-sans-serif, system-ui, sans-serif;
+    color: var(--color-slate-text);
+}
+
+@media (max-width: 768px), (max-height: 600px) {
+    .sun-controls-panel {
+        display: none;
+    }
 }
 
 .sun-controls-title {
-    font-size: 13px;
+    font-size: 0.8125rem;
     font-weight: 600;
     margin: 0;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 6px;
-    color: #ffffff;
+    letter-spacing: 0.05em;
+    border-bottom: 0.0625rem solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 0.5rem;
+    color: var(--color-white-text);
 }
 
 .slider-group {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 0.25rem;
 }
 
 .slider-label {
     display: flex;
     justify-content: space-between;
-    font-size: 11px;
+    font-size: 0.6875rem;
     font-weight: 500;
-    color: var(--color-slate-text-muted, #94a3b8);
+    color: var(--color-slate-text-muted);
 }
 
 .slider-input {
     width: 100%;
-    accent-color: #34d399; /* Passt zum Messdaten-Badge-Grün */
+    accent-color: var(--color-emerald-text);
     cursor: pointer;
 }
