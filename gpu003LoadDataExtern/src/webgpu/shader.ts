@@ -188,12 +188,12 @@ fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
         if (avgVal <= 35.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 25.0) / 10.0); }
         return vec4<f32>(1.0, 0.1, 0.05, 0.5);
     } else {
-        // Luftqualität (AQI) Skala (0: Gut bis 80+: Sehr Schlecht) - Nimmt denselben Farbverlauf!
-        if (avgVal <= 20.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
-        if (avgVal <= 40.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgVal - 20.0) / 20.0); }
-        if (avgVal <= 60.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgVal - 40.0) / 20.0); }
-        if (avgVal <= 80.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 60.0) / 20.0); }
-        return vec4<f32>(1.0, 0.1, 0.05, 0.5);
+        // Luftqualität (US AQI) - Grenzwerte auf 50er Schritte erhöht
+        if (avgVal <= 50.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); } // Blau (Gut)
+        if (avgVal <= 100.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgVal - 50.0) / 50.0); } // Blau -> Grün
+        if (avgVal <= 150.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgVal - 100.0) / 50.0); } // Grün -> Gelb
+        if (avgVal <= 200.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 150.0) / 50.0); } // Gelb -> Rot
+        return vec4<f32>(0.8, 0.0, 0.1, 0.5); // Tiefrot (Sehr schlecht, > 200)
     }
 }
 `;

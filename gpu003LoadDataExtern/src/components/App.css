@@ -48,6 +48,21 @@
     --color-rose-border: rgba(244, 63, 94, 0.15);
     --color-rose-border-active: rgba(244, 63, 94, 0.4);
     --color-rose-shadow: rgba(244, 63, 94, 0.2);
+
+    /* Legenden & Farbskalen */
+    --color-scale-blue: rgb(25, 76, 255);
+    --color-scale-green: rgb(25, 204, 51);
+    --color-scale-yellow: rgb(255, 230, 25);
+    --color-scale-orange: rgb(255, 51, 25);
+    --color-scale-red: rgb(255, 25, 12);
+    --color-scale-darkred: rgb(204, 0, 25);
+
+    /* Wind Animation Legende */
+    --color-wind-stream: rgba(56, 189, 248, 0.8);
+    --color-wind-fast: rgba(56, 189, 248, 0.15);
+    --color-wind-medium: rgba(56, 189, 248, 0.08);
+    --color-wind-slow: rgba(56, 189, 248, 0.02);
+    --color-wind-border: rgba(255, 255, 255, 0.05);
 }
 
 html, body, #root {
