@@ -13,7 +13,7 @@
     display: flex;
     flex-direction: column;
     gap: 16px;
-    min-width: 160px;
+    min-width: 210px; /* Leicht erhöht für die längeren km/h Texte */
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
@@ -35,55 +35,100 @@
     height: 160px;
 }
 
-/* Basis für die Farbbalken */
+/* Basis für die statischen Farbbalken (Temperatur & AQI) */
 .legend-gradient {
     width: 14px;
     border-radius: 7px;
     box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
 }
 
-/* Thermometer-Look für die Temperatur (Werte aus dem Shader) */
 .temperature-gradient {
-    /* Oben Heiß (Rot), Unten Kalt (Blau) */
     background: linear-gradient(
             to top,
-            rgb(25, 76, 255) 0%,      /* <= -10°C */
-            rgb(25, 204, 51) 33%,     /* 10°C */
-            rgb(255, 230, 25) 66%,    /* 25°C */
-            rgb(255, 51, 25) 90%,     /* 35°C */
-            rgb(255, 25, 12) 100%     /* > 35°C */
+            rgb(25, 76, 255) 0%,
+            rgb(25, 204, 51) 33%,
+            rgb(255, 230, 25) 66%,
+            rgb(255, 51, 25) 90%,
+            rgb(255, 25, 12) 100%
     );
-    /* Eine kleine Verdickung unten ("Thermometer-Birne") */
     border-radius: 7px 7px 12px 12px;
 }
 
-/* AQI-Look (Werte aus dem Shader) */
 .aqi-gradient {
     background: linear-gradient(
             to top,
-            rgb(25, 76, 255) 0%,      /* <= 50 (Blau) */
-            rgb(25, 204, 51) 25%,     /* 100 (Grün) */
-            rgb(255, 230, 25) 50%,    /* 150 (Gelb) */
-            rgb(255, 51, 25) 75%,     /* 200 (Rot) */
-            rgb(204, 0, 25) 100%      /* > 200 (Tiefrot) */
+            rgb(25, 76, 255) 0%,
+            rgb(25, 204, 51) 25%,
+            rgb(255, 230, 25) 50%,
+            rgb(255, 51, 25) 75%,
+            rgb(204, 0, 25) 100%
     );
 }
 
-/* Wind-Look */
-.wind-gradient {
-    background: linear-gradient(
-            to top,
-            rgba(56, 189, 248, 0.1) 0%,
-            rgba(56, 189, 248, 0.6) 50%,
-            rgba(255, 255, 255, 1.0) 100%
+/* --- NEU: Animierter Wind-Indikator --- */
+.wind-indicator-wrapper {
+    width: 14px;
+    border-radius: 7px;
+    background-color: rgba(2, 6, 23, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+}
+
+.wind-zone {
+    width: 100%;
+    /* Erzeugt gestrichelte Linien ähnlich den Strömen auf dem Globus */
+    background: repeating-linear-gradient(
+            to bottom,
+            rgba(56, 189, 248, 0.8) 0px,
+            rgba(56, 189, 248, 0.8) 5px,
+            transparent 5px,
+            transparent 14px
     );
+    background-size: 100% 14px;
+}
+
+/* Obere Zone (Starkwind / Orkan): Schnelle Bewegung */
+.wind-zone-fast {
+    height: 35%;
+    animation: flowUp 0.35s linear infinite;
+    background-color: rgba(56, 189, 248, 0.15);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Mittlere Zone (Mäßiger Wind): Mittlere Bewegung */
+.wind-zone-medium {
+    height: 40%;
+    animation: flowUp 0.75s linear infinite;
+    background-color: rgba(56, 189, 248, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Untere Zone (Schwach / Windstill): Sehr langsame Bewegung */
+.wind-zone-slow {
+    height: 25%;
+    animation: flowUp 2.2s linear infinite;
+    background-color: rgba(56, 189, 248, 0.02);
+}
+
+/* Animations-Keyframes für den Strömungseffekt nach oben */
+@keyframes flowUp {
+    from {
+        background-position-y: 14px;
+    }
+    to {
+        background-position-y: 0px;
+    }
 }
 
 .legend-labels {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
 }
 
