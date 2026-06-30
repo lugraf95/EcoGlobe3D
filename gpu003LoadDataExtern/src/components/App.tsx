@@ -6,6 +6,8 @@ import { fetchWeatherData, type GridData } from '../services/dataService';
 import { LayerDropdown } from './layerDropdown/LayerDropdown.tsx';
 import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
 import { GlobeTooltip } from './globeTooltip/GlobeTooltip.tsx';
+// NEU: Import der Legenden-Komponente
+import { Legend } from './legend/Legend.tsx';
 import './App.css';
 
 export function App() {
@@ -99,6 +101,9 @@ export function App() {
                 activeLayer={activeLayer}
                 currentData={currentData}
             />
+
+            {/* NEU: Einbinden der Legende auf der rechten Seite */}
+            <Legend activeLayer={activeLayer} />
         </div>
     );
 }
