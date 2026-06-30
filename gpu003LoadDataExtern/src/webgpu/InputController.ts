@@ -58,11 +58,25 @@ export class InputController {
       this.canvas.releasePointerCapture(e.pointerId);
     };
 
-    this.wheelHandler = (e: WheelEvent) => {
-      e.preventDefault();
-      this.zoom += e.deltaY * 0.001;
-      this.zoom = Math.max(0.5, Math.min(this.zoom, 2.5));
-    };
+      this.wheelHandler = (e: WheelEvent) => {
+          e.preventDefault();
+
+          let zoomDelta = -(e.deltaY * 0.001);
+          const minZoom = 0.5;
+          const maxZoom = 3.5;
+
+          const damping = 1.5;
+
+          if (zoomDelta > 0) {
+              zoomDelta *= (maxZoom - this.zoom) * damping;
+          } else {
+              zoomDelta *= (this.zoom - minZoom) * damping;
+          }
+
+          this.zoom += zoomDelta;
+
+          this.zoom = Math.max(minZoom, Math.min(this.zoom, maxZoom));
+      };
 
     // Register event listeners
     this.canvas.addEventListener('pointerdown', this.pointerDownHandler);
