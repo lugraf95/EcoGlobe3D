@@ -18,6 +18,20 @@ struct FrameData {
     pad2: f32,
 };
 
+const CLOUD_BASE_SCALE: f32 = 0.6;
+const CLOUD_SCALE_BOOST: f32 = 0.005;
+const CLOUD_DEPTH_OFFSET: f32 = 0.009;
+const MIN_VISIBLE_CLOUD_BRIGHTNESS: f32 = 0.02;
+const MIN_SUN_LIGHT: f32 = 0.02;
+const NIGHT_LIGHT_START: f32 = -0.2;
+const NIGHT_LIGHT_END: f32 = 0.1;
+const HEATMAP_ALPHA: f32 = 0.5;
+const HEATMAP_BASE_COLOR: vec4<f32> = vec4<f32>(0.1, 0.3, 1.0, HEATMAP_ALPHA);
+const HEATMAP_GREEN: vec4<f32> = vec4<f32>(0.1, 0.8, 0.2, HEATMAP_ALPHA);
+const HEATMAP_YELLOW: vec4<f32> = vec4<f32>(1.0, 0.9, 0.1, HEATMAP_ALPHA);
+const HEATMAP_RED: vec4<f32> = vec4<f32>(1.0, 0.2, 0.1, HEATMAP_ALPHA);
+const HEATMAP_DEEP_RED: vec4<f32> = vec4<f32>(0.8, 0.0, 0.1, HEATMAP_ALPHA);
+
 @group(0) @binding(0) var myTexture: texture_2d<f32>;
 @group(0) @binding(1) var mySampler: sampler;
 @group(0) @binding(2) var<uniform> frame: FrameData;
@@ -52,148 +66,175 @@ struct VertexOutput {
     @location(1) normal: vec3<f32>,
 };
 
+// Baut die Positions- und Normalenwerte für das Kugel-Mesh auf.
 @vertex
 fn vertexMain(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    out.uv = in.uv; 
-    let rotatedPosition = applyRotation(in.position.xyz);
+    out.uv = in.uv;
+    let rotatedPosition = rotateGlobe(in.position.xyz);
     out.position = calculateScreenPosition(rotatedPosition);
-    out.normal = applyRotation(in.normal.xyz);
+    out.normal = rotateGlobe(in.normal.xyz);
     return out;
 }
 
-fn applyRotation(pos: vec3<f32>) -> vec3<f32> {
-    var rotated = rotateY(pos, frame.rotY);
-    return rotateX(rotated, frame.rotX);
+fn rotateGlobe(position: vec3<f32>) -> vec3<f32> {
+    let rotatedAroundY = rotateY(position, frame.rotY);
+    return rotateX(rotatedAroundY, frame.rotX);
 }
 
-fn rotateX(pos: vec3<f32>, angle: f32) -> vec3<f32> {
+fn rotateX(position: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
-    return vec3<f32>(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
+    return vec3<f32>(position.x, position.y * c - position.z * s, position.y * s + position.z * c);
 }
 
-fn rotateY(pos: vec3<f32>, angle: f32) -> vec3<f32> {
+fn rotateY(position: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
-    return vec3<f32>(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
+    return vec3<f32>(position.x * c + position.z * s, position.y, -position.x * s + position.z * c);
 }
 
-fn calculateScreenPosition(pos: vec3<f32>) -> vec4<f32> {
-    let scale = (0.6 + (frame.isCloud * 0.005)) * frame.zoom;
-    let zOffset = frame.isCloud * 0.009;
-    return vec4<f32>((pos.x * scale) / frame.aspectRatio, pos.y * scale, (pos.z * 0.1) + 0.5 - zOffset, 1.0);
+fn calculateScreenPosition(position: vec3<f32>) -> vec4<f32> {
+    let globeScale = (CLOUD_BASE_SCALE + (frame.isCloud * CLOUD_SCALE_BOOST)) * frame.zoom;
+    let depthOffset = frame.isCloud * CLOUD_DEPTH_OFFSET;
+    return vec4<f32>((position.x * globeScale) / frame.aspectRatio, position.y * globeScale, (position.z * 0.1) + 0.5 - depthOffset, 1.0);
 }
 
 @fragment
 fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.normal);
-    let lightIntensity = calculateLightIntensity(normal);
+    let sunLight = calculateSunLight(normal);
     
     if (frame.isCloud > 0.5) {
-        return renderCloudLayer(in.uv, lightIntensity);
+        return renderCloudLayer(in.uv, sunLight);
     }
-    return renderEarthLayer(in.uv, lightIntensity);
+    return renderEarthLayer(in.uv, sunLight);
 }
 
-fn calculateLightIntensity(normal: vec3<f32>) -> f32 {
-    let sunVec = normalize(vec3<f32>(frame.sunDirX, frame.sunDirY, frame.sunDirZ));
-    return dot(normal, sunVec);
+fn calculateSunLight(normal: vec3<f32>) -> f32 {
+    let sunDirection = normalize(vec3<f32>(frame.sunDirX, frame.sunDirY, frame.sunDirZ));
+    return dot(normal, sunDirection);
 }
 
-fn renderCloudLayer(uv: vec2<f32>, lightIntensity: f32) -> vec4<f32> {
-    let texColor = textureSample(myTexture, mySampler, uv);
-    let brightness = max(texColor.r, max(texColor.g, texColor.b));
-    if (brightness < 0.02) { discard; }
+// Zeichnet die Wolken mit einer einfachen Helligkeitsmaske aus dem Texturwert.
+fn renderCloudLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
+    let cloudColor = textureSample(myTexture, mySampler, uv);
+    let cloudBrightness = max(cloudColor.r, max(cloudColor.g, cloudColor.b));
+    if (cloudBrightness < MIN_VISIBLE_CLOUD_BRIGHTNESS) { discard; }
     
-    let alpha = brightness * 0.8; 
-    let finalLight = max(lightIntensity, 0.02);
-    return vec4<f32>(vec3<f32>(1.0, 1.0, 1.0) * finalLight, alpha);
+    let cloudAlpha = cloudBrightness * 0.8;
+    let visibleLight = max(sunLight, MIN_SUN_LIGHT);
+    return vec4<f32>(vec3<f32>(visibleLight), cloudAlpha);
 }
 
-fn renderEarthLayer(uv: vec2<f32>, lightIntensity: f32) -> vec4<f32> {
-    let baseTextureColor = textureSample(myTexture, mySampler, uv).rgb;
-    var finalSurfaceColor = baseTextureColor;
-    var lightEmission = vec3<f32>(0.0, 0.0, 0.0);
+fn renderEarthLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
+    let surfaceColor = textureSample(myTexture, mySampler, uv).rgb;
+    let weatherOverlayEnabled = usesWeatherOverlay(frame.weatherMode, frame.weatherPointCount);
+    var shadedSurfaceColor = surfaceColor;
+    var emissiveColor = vec3<f32>(0.0, 0.0, 0.0);
     
-    if ((frame.weatherMode == 1.0 || frame.weatherMode == 3.0) && frame.weatherPointCount > 0.0) {
-        let heatmap = applyHeatmap(uv, frame.weatherMode);
-        finalSurfaceColor = mix(baseTextureColor, heatmap.rgb, heatmap.a);
+    if (weatherOverlayEnabled) {
+        // Bei Wettermodus wird die Oberflächenfarbe mit der Heatmap überblendet.
+        let heatmapColor = applyHeatmap(uv, frame.weatherMode);
+        shadedSurfaceColor = mix(surfaceColor, heatmapColor.rgb, heatmapColor.a);
     } else {
-        lightEmission = calculateNightLights(uv, lightIntensity);
+        // Ohne Wetterdaten werden die Nachtslichter auf der dunklen Seite eingeblendet.
+        emissiveColor = calculateNightLights(uv, sunLight);
     }
     
-    let finalLight = max(lightIntensity, 0.02);
-    let litColor = (finalSurfaceColor * finalLight) + lightEmission;
-    return vec4<f32>(litColor, 1.0);
+    let visibleLight = max(sunLight, MIN_SUN_LIGHT);
+    return vec4<f32>((shadedSurfaceColor * visibleLight) + emissiveColor, 1.0);
 }
 
-fn calculateNightLights(uv: vec2<f32>, lightIntensity: f32) -> vec3<f32> {
+fn usesWeatherOverlay(mode: f32, pointCount: f32) -> bool {
+    return pointCount > 0.0 && (mode == 1.0 || mode == 3.0);
+}
+
+fn calculateNightLights(uv: vec2<f32>, sunLight: f32) -> vec3<f32> {
     let nightColor = textureSample(nightTexture, mySampler, uv).rgb;
     let cityBrightness = max(nightColor.r, max(nightColor.g, nightColor.b));
-    let cleanLights = smoothstep(0.09, 1.3, cityBrightness);
-    let nightMix = 1.0 - smoothstep(-0.2, 0.1, lightIntensity);
-    return vec3<f32>(cleanLights, cleanLights, cleanLights) * nightMix * vec3<f32>(1.0, 0.9, 0.7);
+    let cityLight = smoothstep(0.09, 1.3, cityBrightness);
+    let nightBlend = 1.0 - smoothstep(NIGHT_LIGHT_START, NIGHT_LIGHT_END, sunLight);
+    return vec3<f32>(cityLight) * nightBlend * vec3<f32>(1.0, 0.9, 0.7);
 }
 
-// Hochoptimierte O(1) Heatmap-Berechnung durch Bilineare Interpolation
+// Wetterwerte per bilinearer Interpolation aus den vier Nachbarpunkten bestimmen.
 fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
-    let maxIdx = arrayLength(&weather.values) - 1u;
-    if (maxIdx <= 0u) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
+    let lastIndex = arrayLength(&weather.values) - 1u;
+    if (lastIndex <= 0u) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
 
     let lat = (0.5 - uv.y) * 180.0;
     let lon = (uv.x * 360.0) - 180.0;
 
-    let latIdxF = (90.0 - lat) / frame.latStep;
-    let lonIdxF = (lon + 180.0) / frame.lonStep;
+    let latitudeIndex = (90.0 - lat) / frame.latStep;
+    let longitudeIndex = (lon + 180.0) / frame.lonStep;
 
-    let maxRows = u32(180.0 / frame.latStep); 
-    let gridCols = u32(frame.gridWidth);
+    let rowCount = u32(180.0 / frame.latStep);
+    let columnCount = u32(frame.gridWidth);
 
-    let i0 = clamp(u32(floor(latIdxF)), 0u, maxRows);
-    let i1 = clamp(i0 + 1u, 0u, maxRows);
+    // Die zwei benachbarten Rasterzeilen werden auf gültige Indizes begrenzt.
+    let row0 = clamp(u32(floor(latitudeIndex)), 0u, rowCount);
+    let row1 = clamp(row0 + 1u, 0u, rowCount);
     
-    let j0 = u32(floor(lonIdxF)) % gridCols;
-    let j1 = (j0 + 1u) % gridCols; 
+    // Die Spalten laufen zyklisch, damit der Übergang an der Datumsgrenze sauber bleibt.
+    let column0 = u32(floor(longitudeIndex)) % columnCount;
+    let column1 = (column0 + 1u) % columnCount;
 
-    let idx00 = min(i0 * gridCols + j0, maxIdx);
-    let idx10 = min(i1 * gridCols + j0, maxIdx);
-    let idx01 = min(i0 * gridCols + j1, maxIdx);
-    let idx11 = min(i1 * gridCols + j1, maxIdx);
+    let index00 = min(row0 * columnCount + column0, lastIndex);
+    let index10 = min(row1 * columnCount + column0, lastIndex);
+    let index01 = min(row0 * columnCount + column1, lastIndex);
+    let index11 = min(row1 * columnCount + column1, lastIndex);
 
-    var v00: f32; var v10: f32; var v01: f32; var v11: f32;
+    // Je nach Modus wird Temperatur oder Luftqualität aus denselben Rasterpunkten gelesen.
+    let value00 = sampleWeatherValue(index00, mode);
+    let value10 = sampleWeatherValue(index10, mode);
+    let value01 = sampleWeatherValue(index01, mode);
+    let value11 = sampleWeatherValue(index11, mode);
 
+    // Aus den vier Stützstellen wird der geglättete Endwert berechnet.
+    let interpolatedValue = bilinearInterpolate(
+        value00,
+        value10,
+        value01,
+        value11,
+        fract(latitudeIndex),
+        fract(longitudeIndex)
+    );
+
+    return mapHeatmapColor(interpolatedValue, mode);
+}
+
+fn sampleWeatherValue(index: u32, mode: f32) -> f32 {
     if (mode == 1.0) {
-        v00 = weather.values[idx00].temperature;
-        v10 = weather.values[idx10].temperature;
-        v01 = weather.values[idx01].temperature;
-        v11 = weather.values[idx11].temperature;
-    } else {
-        v00 = weather.values[idx00].airQuality;
-        v10 = weather.values[idx10].airQuality;
-        v01 = weather.values[idx01].airQuality;
-        v11 = weather.values[idx11].airQuality;
+        return weather.values[index].temperature;
     }
+    return weather.values[index].airQuality;
+}
 
-    let fracLat = fract(latIdxF);
-    let fracLon = fract(lonIdxF);
+fn bilinearInterpolate(v00: f32, v10: f32, v01: f32, v11: f32, fracLat: f32, fracLon: f32) -> f32 {
+    let topRow = mix(v00, v01, fracLon);
+    let bottomRow = mix(v10, v11, fracLon);
+    return mix(topRow, bottomRow, fracLat);
+}
 
-    let t0 = mix(v00, v01, fracLon);
-    let t1 = mix(v10, v11, fracLon);
-    let avgVal = mix(t0, t1, fracLat);
-    
+fn mapHeatmapColor(value: f32, mode: f32) -> vec4<f32> {
     if (mode == 1.0) {
-        // Temperatur-Skala (-10°C bis 35°C)
-        if (avgVal <= -10.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); }
-        if (avgVal <= 10.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgVal + 10.0) / 20.0); }
-        if (avgVal <= 25.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgVal - 10.0) / 15.0); }
-        if (avgVal <= 35.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 25.0) / 10.0); }
-        return vec4<f32>(1.0, 0.1, 0.05, 0.5);
-    } else {
-        // Luftqualität (US AQI) - Grenzwerte auf 50er Schritte erhöht
-        if (avgVal <= 50.0) { return vec4<f32>(0.1, 0.3, 1.0, 0.5); } // Blau (Gut)
-        if (avgVal <= 100.0) { return mix(vec4<f32>(0.1, 0.3, 1.0, 0.5), vec4<f32>(0.1, 0.8, 0.2, 0.5), (avgVal - 50.0) / 50.0); } // Blau -> Grün
-        if (avgVal <= 150.0) { return mix(vec4<f32>(0.1, 0.8, 0.2, 0.5), vec4<f32>(1.0, 0.9, 0.1, 0.5), (avgVal - 100.0) / 50.0); } // Grün -> Gelb
-        if (avgVal <= 200.0) { return mix(vec4<f32>(1.0, 0.9, 0.1, 0.5), vec4<f32>(1.0, 0.2, 0.1, 0.5), (avgVal - 150.0) / 50.0); } // Gelb -> Rot
-        return vec4<f32>(0.8, 0.0, 0.1, 0.5); // Tiefrot (Sehr schlecht, > 200)
+        return mapTemperatureColor(value);
     }
+    return mapAirQualityColor(value);
+}
+
+fn mapTemperatureColor(value: f32) -> vec4<f32> {
+    if (value <= -10.0) { return HEATMAP_BASE_COLOR; }
+    if (value <= 10.0) { return mix(HEATMAP_BASE_COLOR, HEATMAP_GREEN, (value + 10.0) / 20.0); }
+    if (value <= 25.0) { return mix(HEATMAP_GREEN, HEATMAP_YELLOW, (value - 10.0) / 15.0); }
+    if (value <= 35.0) { return mix(HEATMAP_YELLOW, HEATMAP_RED, (value - 25.0) / 10.0); }
+    return HEATMAP_RED;
+}
+
+fn mapAirQualityColor(value: f32) -> vec4<f32> {
+    if (value <= 50.0) { return HEATMAP_BASE_COLOR; }
+    if (value <= 100.0) { return mix(HEATMAP_BASE_COLOR, HEATMAP_GREEN, (value - 50.0) / 50.0); }
+    if (value <= 150.0) { return mix(HEATMAP_GREEN, HEATMAP_YELLOW, (value - 100.0) / 50.0); }
+    if (value <= 200.0) { return mix(HEATMAP_YELLOW, HEATMAP_RED, (value - 150.0) / 50.0); }
+    return HEATMAP_DEEP_RED;
 }
 `;
