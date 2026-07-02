@@ -4,7 +4,7 @@ interface LegendProps {
     activeLayer: string;
 }
 
-const LEGEND_DATA: Record<string, any> = {
+const LEGEND_CONFIGS: Record<string, any> = {
     temperature: {
         title: 'Temperatur (°C)',
         type: 'gradient',
@@ -25,28 +25,34 @@ const LEGEND_DATA: Record<string, any> = {
     }
 };
 
+/**
+ * Zeigt die Legende passend zur aktuell ausgewählten Datenschicht an.
+ * Wird im Standard-Ansichtsmodus (Fotorealismus) ausgeblendet.
+ */
 export function Legend({ activeLayer }: LegendProps) {
-    if (activeLayer === 'normal' || !LEGEND_DATA[activeLayer]) {
+    if (activeLayer === 'normal' || !LEGEND_CONFIGS[activeLayer]) {
         return null;
     }
 
-    const data = LEGEND_DATA[activeLayer];
+    const currentLegendData = LEGEND_CONFIGS[activeLayer];
 
     return (
         <div className={`legend-container ${activeLayer}`}>
-            <h3 className="legend-title">{data.title}</h3>
+            <h3 className="legend-title">{currentLegendData.title}</h3>
             <div className="legend-content">
-                {data.type === 'animation' ? (
+                {currentLegendData.type === 'animation' ? (
                     <div className="wind-indicator-wrapper">
                         <div className="wind-zone wind-zone-fast" title="Sturm / Orkan"></div>
                         <div className="wind-zone wind-zone-medium" title="Mäßiger bis starker Wind"></div>
                         <div className="wind-zone wind-zone-slow" title="Schwach / Windstill"></div>
                     </div>
                 ) : (
-                    <div className={`legend-gradient ${data.gradientClass}`}></div>
+                    <div className={`legend-gradient ${currentLegendData.gradientClass}`}></div>
                 )}
+
+                {/* Text-Labels neben dem Farbverlauf oder der Animation */}
                 <div className="legend-labels">
-                    {data.labels.map((label: string, index: number) => (
+                    {currentLegendData.labels.map((label: string, index: number) => (
                         <span key={index} className="legend-label-item">{label}</span>
                     ))}
                 </div>
