@@ -2,7 +2,7 @@ export type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'air_quality';;
 
 const API_BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 
-const TARGET_POINTS = 1000; // <--- HIER DEINE GEWÜNSCHTE PUNKTZAHL EINTRAGEN
+const TARGET_POINTS = 300; // <--- HIER DEINE GEWÜNSCHTE PUNKTZAHL EINTRAGEN
 const CHUNK_SIZE = 150;    // Groß genug, damit 100 Punkte in exakt EINEN Request passen
 const CONCURRENT_REQUESTS = 1;
 
