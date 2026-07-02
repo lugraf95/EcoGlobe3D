@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react';
 import { GlobeRenderer } from '../../webgpu/GlobeRenderer';
-import type {GridData} from '../../services/dataService';
+import type { GridData } from '../../services/dataService';
 
 import './GlobeTooltip.css';
 
@@ -53,20 +53,29 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
 
             if (pointIndex >= currentData.buffer.length) return;
 
-            // Text generieren
+            // Start des Tooltip-Texts
             let valueText = `Breite.: ${coords.lat.toFixed(1)}°, Länge.: ${coords.lon.toFixed(1)}°\n`;
 
-            if (activeLayer === 'temperature') {
-                const temp = currentData.buffer[pointIndex + 2];
-                valueText += `Temperatur: ${temp.toFixed(1)} °C`;
-            } else if (activeLayer === 'wind') {
-                const u = currentData.buffer[pointIndex + 3];
-                const v = currentData.buffer[pointIndex + 4];
-                const speed = Math.sqrt(u * u + v * v);
-                valueText += `Windgeschw.: ${speed.toFixed(1)} km/h`;
-            } else if (activeLayer === 'air_quality') {
-                const aqi = currentData.buffer[pointIndex + 5];
-                valueText += `Luftqualität (AQI): ${Math.round(aqi)}`;
+            const generators: Record<string, () => string> = {
+                temperature: () => {
+                    const temp = currentData.buffer[pointIndex + 2];
+                    return `Temperatur: ${temp.toFixed(1)} °C`;
+                },
+                wind: () => {
+                    const u = currentData.buffer[pointIndex + 3];
+                    const v = currentData.buffer[pointIndex + 4];
+                    const speed = Math.sqrt(u * u + v * v);
+                    return `Windgeschw.: ${speed.toFixed(1)} km/h`;
+                },
+                air_quality: () => {
+                    const aqi = currentData.buffer[pointIndex + 5];
+                    return `Luftqualität (AQI): ${Math.round(aqi)}`;
+                }
+            };
+
+            // Falls es einen Generator für das aktuelle Layer gibt, füge den Text an
+            if (generators[activeLayer]) {
+                valueText += generators[activeLayer]();
             }
 
             setTooltip({

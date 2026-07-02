@@ -9,37 +9,37 @@ interface LayerDropdownProps {
 
 type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'air_quality';
 
+const LAYERS = [
+    {
+        id: 'normal' as ClimateLayer,
+        name: 'Normale Ansicht',
+        icon: Globe,
+        desc: 'Fotorealistische 3D Konturen mit Ozeantiefen und Wolkenformationen.',
+    },
+    {
+        id: 'temperature' as ClimateLayer,
+        name: 'Temperatur',
+        icon: Thermometer,
+        desc: 'Globale Erwärmungsmuster von arktischen Polen bis zur Äquatorhitze.',
+    },
+    {
+        id: 'wind' as ClimateLayer,
+        name: 'Windströme',
+        icon: Wind,
+        desc: 'Echtzeit Windgeschwindigkeiten mit simulierten Wirbelstürmen über Meeren.',
+    },
+    {
+        id: 'air_quality' as ClimateLayer,
+        name: 'Luftqualität',
+        icon: CloudFog,
+        desc: 'Globale Luftqualität (AQI) und Feinstaubbelastung in Echtzeit.',
+    }
+];
+
 export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps) {
     const [isLayersExpanded, setIsLayersExpanded] = useState(true);
 
-    const layers = [
-        {
-            id: 'normal' as ClimateLayer,
-            name: 'Normale Ansicht',
-            icon: Globe,
-            desc: 'Fotorealistische 3D Konturen mit Ozeantiefen und Wolkenformationen.',
-        },
-        {
-            id: 'temperature' as ClimateLayer,
-            name: 'Temperatur',
-            icon: Thermometer,
-            desc: 'Globale Erwärmungsmuster von arktischen Polen bis zur Äquatorhitze.',
-        },
-        {
-            id: 'wind' as ClimateLayer,
-            name: 'Windströme',
-            icon: Wind,
-            desc: 'Echtzeit Windgeschwindigkeiten mit simulierten Wirbelstürmen über Meeren.',
-        },
-        {
-            id: 'air_quality' as ClimateLayer,
-            name: 'Luftqualität',
-            icon: CloudFog,
-            desc: 'Globale Luftqualität (AQI) und Feinstaubbelastung in Echtzeit.',
-        }
-    ];
-
-    const activeLayerInfo = layers.find(l => l.id === activeLayer) || layers[0];
+    const activeLayerInfo = LAYERS.find(l => l.id === activeLayer) || LAYERS[0];
 
     return (
         <div className="control-panel-aside">
@@ -62,7 +62,7 @@ export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps
 
                 {/* Aufklappbarer Body */}
                 <div className={`layers-body ${isLayersExpanded ? 'expanded' : 'collapsed'}`}>
-                    {layers.map((l) => {
+                    {LAYERS.map((l) => {
                         const Icon = l.icon;
                         const isSelected = activeLayer === l.id;
 
