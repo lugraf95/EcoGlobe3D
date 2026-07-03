@@ -18,12 +18,8 @@ let isFetchingWeather = false;
 let fetchWeatherPromise: Promise<GridData> | null = null;
 
 /**
- * Generiert ein gleichmäßiges, dynamisches Raster von Geokoordinaten und initialisiert den Datenspeicher.
- * Berechnet die Anzahl der Reihen und Spalten basierend auf der Zielpunktzahl für den gesamten Globus
- * in einem 2:1-Seitenverhältnis (360° Länge / 180° Breite).
- * * @param targetPoints - Die angestrebte Gesamtanzahl der Rasterpunkte.
- * @returns Ein Objekt bestehend aus dem vorinitialisierten Float32Array (Memory Layout Stride 8),
- * einem Array zur Zuordnung von API-Koordinaten zum Buffer-Index sowie den Rasterdimensionen.
+ * Erzeugt ein dynamisches Raster von Geokoordinaten basierend auf der Zielpunktzahl.
+ * Gibt ein initialisiertes Float32Array sowie die Rasterdimensionen zurück.
  */
 function createDynamicGrid(targetPoints: number) {
     const rows = Math.max(1, Math.round(Math.sqrt(targetPoints / 2)));
@@ -56,10 +52,7 @@ function createDynamicGrid(targetPoints: number) {
 
 /**
  * Lädt globale Wetter- und Luftqualitätsdaten asynchron über die Open-Meteo API herunter.
- * Teilt das generierte Raster in kleinere Chunks auf, um HTTP-URL-Längenlimits der API zu respektieren.
- * Die abgerufenen Metriken (Temperatur, Windvektoren, AQI) werden anhand des Mappings
- * direkt an die richtigen Offsets in das zugrundeliegende Float32Array geschrieben.
- * * @returns Ein Promise, das zu den vollständig befüllten Rasterdaten (Buffer und Metadaten) auflöst.
+ * Teilt die Anfragen in kleinere Chunks auf und schreibt die Metriken direkt in das Float32Array.
  */
 async function performGlobalWeatherDownload(): Promise<GridData> {
     const { buffer, coordinates, cols, latStep, lonStep } = createDynamicGrid(TARGET_POINTS);
@@ -113,11 +106,7 @@ async function performGlobalWeatherDownload(): Promise<GridData> {
 
 /**
  * Öffentlicher Einstiegspunkt für den Abruf der Klimadaten.
- * Implementiert einen Singleton/Caching-Mechanismus, um redundante API-Aufrufe zu verhindern.
- * Parallele Aufrufe dieser Methode während eines noch laufenden Downloads
- * werden gebündelt und warten auf denselben Fetch-Vorgang (Promise-Deduplizierung).
- * * @param layerType - Der Name der angeforderten Visualisierungsebene. Bei 'normal' werden keine Daten abgerufen.
- * @returns Ein Promise, das das geladene oder gecachte Float32Array nebst Raster-Metadaten zurückgibt.
+ * Nutzt Caching und Promise-Deduplizierung, um redundante API-Aufrufe zu verhindern.
  */
 export async function fetchWeatherData(layerType: string): Promise<GridData> {
     if (layerType === 'normal') {
