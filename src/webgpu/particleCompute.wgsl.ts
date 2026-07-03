@@ -1,4 +1,5 @@
 export const particleComputeShader = /*wgsl*/ `
+// Enthält die globalen Uniform-Variablen wie Kameraparameter, Zeit und Raster-Metadaten zur Steuerung der Simulation.
 struct FrameData { 
     time: f32, isCloud: f32, rotX: f32, rotY: f32,
     zoom: f32, aspectRatio: f32, sunDirX: f32, sunDirY: f32,
@@ -17,11 +18,13 @@ const HALF_CIRCLE_DEGREES: f32 = 180.0;
 const TOP_LATITUDE_DEGREES: f32 = 90.0;
 const PI: f32 = 3.14159265;
 
+// Speichert den Zustand eines Partikels, komprimiert in zwei Vektoren für Position, Alter, Geschwindigkeit und maximale Lebensdauer.
 struct Particle {
     posAndAge: vec4<f32>,
     velAndMax: vec4<f32>,
 };
 
+// Repräsentiert die abgerufenen Wetterdaten für einen geografischen Rasterpunkt, um daraus das Windfeld zu berechnen.
 struct WeatherPoint {
     lat: f32, lon: f32, temp: f32, windU: f32,
     windV: f32, pad1: f32, pad2: f32, pad3: f32,
@@ -31,7 +34,7 @@ struct WeatherPoint {
 @group(0) @binding(1) var<storage, read> weather: array<WeatherPoint>;
 @group(0) @binding(2) var<storage, read_write> particles: array<Particle>;
 
-// Aktualisiert ein einzelnes Partikel und entscheidet über Respawn oder Bewegung.
+// Steuert den Lebenszyklus jedes Partikels in der Workgroup, indem das Alter erhöht und entweder eine Bewegung oder ein Respawn ausgelöst wird.
 @compute @workgroup_size(64)
 fn computeMain(@builtin(global_invocation_id) globalId: vec3<u32>) {
     let particleIndex = globalId.x;
@@ -50,12 +53,12 @@ fn computeMain(@builtin(global_invocation_id) globalId: vec3<u32>) {
     particles[particleIndex] = particle;
 }
 
-// Prüft, ob ein Partikel auf der Rückseite der Kugel liegt.
+// Prüft, ob ein Partikel seine maximale Lebensdauer überschritten hat oder auf die unsichtbare Rückseite der Kugel gewandert ist.
 fn shouldRespawnParticle(particle: Particle) -> bool {
     return particle.posAndAge.w > particle.velAndMax.w || isBackface(particle.posAndAge.xyz);
 }
 
-// Setzt ein Partikel auf die Vorderseite der Kugel zurück.
+// Generiert ein neues Partikel mit zufälliger, der Kamera zugewandter Startposition auf der Kugeloberfläche und setzt dessen Alter zurück.
 fn respawnParticle(seed: u32) -> Particle {
     var particle: Particle;
     particle.posAndAge.w = 0.0;
@@ -74,7 +77,7 @@ fn respawnParticle(seed: u32) -> Particle {
     return particle;
 }
 
-// Bewegt ein Partikel entlang des lokalen Windfelds.
+// Aktualisiert die 3D-Position und den Geschwindigkeitsvektor eines Partikels basierend auf dem anliegenden Windfeld.
 fn advanceParticle(particle: Particle) -> Particle {
     var updatedParticle = particle;
     let currentPosition = particle.posAndAge.xyz;
@@ -85,7 +88,7 @@ fn advanceParticle(particle: Particle) -> Particle {
     return updatedParticle;
 }
 
-// Wandelt eine Kugelposition in Breite und Länge um und bewegt sie mit Wind.
+// Transformiert die 3D-Kugelkoordinaten in geografische Grade, verschiebt sie anhand der Windvektoren und konvertiert sie zurück in den 3D-Raum.
 fn advectParticle(position: vec3<f32>) -> vec3<f32> {
     let latitude = degrees(asin(position.y));
     let longitude = degrees(atan2(-position.z, position.x));
@@ -109,13 +112,13 @@ fn advectParticle(position: vec3<f32>) -> vec3<f32> {
     );
 }
 
-// Prüft, ob ein Punkt auf der Rückseite der Kugel liegt.
+// Ermittelt durch Berücksichtigung der aktuellen Kamerarotation, ob sich eine 3D-Position auf der abgewandten Seite der Kugel befindet.
 fn isBackface(position: vec3<f32>) -> bool {
     let rotatedPosition = rotateX(rotateY(position, frame.rotY), frame.rotX);
     return rotatedPosition.z < -0.1;
 }
 
-// Wickelt die Länge auf den gültigen Bereich von -180 bis 180 Grad zurück.
+// Korrigiert den Längengrad nach einer Verschiebung zyklisch, damit er stets im gültigen Bereich von -180 bis 180 Grad verbleibt.
 fn wrapLongitude(longitude: f32) -> f32 {
     var wrappedLongitude = longitude;
 
@@ -125,7 +128,7 @@ fn wrapLongitude(longitude: f32) -> f32 {
     return wrappedLongitude;
 }
 
-// Berechnet die Windgeschwindigkeit für einen Breiten- und Längengrad per Interpolation.
+// Berechnet den lokalen Windvektor an einer beliebigen geografischen Position durch bilineare Interpolation der vier nächstgelegenen Rasterpunkte.
 fn getWindAt(latitude: f32, longitude: f32) -> vec2<f32> {
     let lastIndex = arrayLength(&weather) - 1u;
     if (lastIndex <= 0u) { return vec2<f32>(0.0, 0.0); }
@@ -160,19 +163,19 @@ fn getWindAt(latitude: f32, longitude: f32) -> vec2<f32> {
     return mix(topWind, bottomWind, latitudeFraction);
 }
 
-// Rotiert einen Vektor um die X-Achse.
+// Rotiert einen 3D-Vektor um den angegebenen Winkel um die X-Achse.
 fn rotateX(pos: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
     return vec3<f32>(pos.x, pos.y * c - pos.z * s, pos.y * s + pos.z * c);
 }
 
-// Rotiert einen Vektor um die Y-Achse.
+// Rotiert einen 3D-Vektor um den angegebenen Winkel um die Y-Achse.
 fn rotateY(pos: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
     return vec3<f32>(pos.x * c + pos.z * s, pos.y, -pos.x * s + pos.z * c);
 }
 
-// Erzeugt aus einem Seed einen gleichmäßig verteilten Zufallswert.
+// Erzeugt basierend auf einem veränderlichen Seed einen deterministischen, gleichmäßig verteilten Pseudo-Zufallswert zwischen 0,0 und 1,0.
 fn random(seed: u32) -> f32 {
     var state = seed * 747796405u + 2891336453u;
     let word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;

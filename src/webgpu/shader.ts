@@ -1,4 +1,5 @@
 export const shaderCode = /*wgsl*/ `
+// Speichert die globalen Uniform-Variablen wie Kameraparameter, Sonnenrichtung und Raster-Metadaten für den aktuellen Frame.
 struct FrameData { 
     time: f32,          
     isCloud: f32,       
@@ -37,6 +38,7 @@ const HEATMAP_DEEP_RED: vec4<f32> = vec4<f32>(0.8, 0.0, 0.1, HEATMAP_ALPHA);
 @group(0) @binding(2) var<uniform> frame: FrameData;
 @group(0) @binding(3) var nightTexture: texture_2d<f32>;
 
+// Repräsentiert die gebündelten Wetterdaten (wie Temperatur und Luftqualität) für einen spezifischen geografischen Rasterpunkt.
 struct WeatherPoint {
     latitude: f32,
     longitude: f32,
@@ -48,25 +50,28 @@ struct WeatherPoint {
     pad3: f32,
 };
 
+// Kapselt ein Array aller Wetterpunkte für den effizienten Storage-Buffer-Zugriff.
 struct WeatherData {
     values: array<WeatherPoint>,
 };
 
 @group(0) @binding(4) var<storage, read> weather: WeatherData;
 
+// Definiert die eingehenden Attribute eines Vertex, bestehend aus lokaler Position, Normalenvektor und UV-Koordinaten.
 struct VertexInput {
     @location(0) position: vec4<f32>,
     @location(1) normal: vec4<f32>,
     @location(2) uv: vec2<f32>,
 };
 
+// Definiert die weitergegebenen Daten vom Vertex- zum Fragment-Shader, einschließlich der projizierten Bildschirmposition.
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) normal: vec3<f32>,
 };
 
-// Baut die Positions- und Normalenwerte für das Kugel-Mesh auf.
+// Rotiert und projiziert die Vertex-Positionen und Normalen der Kugel basierend auf den aktuellen Kamera- und Rotationsparametern.
 @vertex
 fn vertexMain(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
@@ -77,27 +82,32 @@ fn vertexMain(in: VertexInput) -> VertexOutput {
     return out;
 }
 
+// Führt die vollständige Rotation eines 3D-Punktes auf der Kugel um die X- und Y-Achse durch.
 fn rotateGlobe(position: vec3<f32>) -> vec3<f32> {
     let rotatedAroundY = rotateY(position, frame.rotY);
     return rotateX(rotatedAroundY, frame.rotX);
 }
 
+// Rotiert einen 3D-Vektor um den angegebenen Winkel um die X-Achse.
 fn rotateX(position: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
     return vec3<f32>(position.x, position.y * c - position.z * s, position.y * s + position.z * c);
 }
 
+// Rotiert einen 3D-Vektor um den angegebenen Winkel um die Y-Achse.
 fn rotateY(position: vec3<f32>, angle: f32) -> vec3<f32> {
     let s = sin(angle); let c = cos(angle);
     return vec3<f32>(position.x * c + position.z * s, position.y, -position.x * s + position.z * c);
 }
 
+// Berechnet die finale 2D-Bildschirmposition unter Berücksichtigung von Skalierung, Zoom, Seitenverhältnis und dem Wolken-Tiefenversatz.
 fn calculateScreenPosition(position: vec3<f32>) -> vec4<f32> {
     let globeScale = (CLOUD_BASE_SCALE + (frame.isCloud * CLOUD_SCALE_BOOST)) * frame.zoom;
     let depthOffset = frame.isCloud * CLOUD_DEPTH_OFFSET;
     return vec4<f32>((position.x * globeScale) / frame.aspectRatio, position.y * globeScale, (position.z * 0.1) + 0.5 - depthOffset, 1.0);
 }
 
+// Bestimmt die finale Pixelfarbe durch Beleuchtungsberechnung und ruft je nach Ebene (Wolke/Erde) die entsprechende Render-Funktion auf.
 @fragment
 fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = normalize(in.normal);
@@ -109,12 +119,13 @@ fn fragmentMain(in: VertexOutput) -> @location(0) vec4<f32> {
     return renderEarthLayer(in.uv, sunLight);
 }
 
+// Berechnet die Intensität des Sonnenlichts basierend auf dem Skalarprodukt zwischen der Oberflächennormalen und der Sonnenrichtung.
 fn calculateSunLight(normal: vec3<f32>) -> f32 {
     let sunDirection = normalize(vec3<f32>(frame.sunDirX, frame.sunDirY, frame.sunDirZ));
     return dot(normal, sunDirection);
 }
 
-// Zeichnet die Wolken mit einer einfachen Helligkeitsmaske aus dem Texturwert.
+// Zeichnet die Wolkenschicht durch Auswertung der Texturhelligkeit und verwirft stark transparente Pixel zur Leistungsoptimierung (Discard).
 fn renderCloudLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
     let cloudColor = textureSample(myTexture, mySampler, uv);
     let cloudBrightness = max(cloudColor.r, max(cloudColor.g, cloudColor.b));
@@ -125,6 +136,7 @@ fn renderCloudLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
     return vec4<f32>(vec3<f32>(visibleLight), cloudAlpha);
 }
 
+// Rendert die Erdoberfläche und blendet je nach Modus entweder eine Wetter-Heatmap oder städtische Nachtlichter auf der dunklen Seite ein.
 fn renderEarthLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
     let surfaceColor = textureSample(myTexture, mySampler, uv).rgb;
     let weatherOverlayEnabled = usesWeatherOverlay(frame.weatherMode, frame.weatherPointCount);
@@ -132,11 +144,9 @@ fn renderEarthLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
     var emissiveColor = vec3<f32>(0.0, 0.0, 0.0);
     
     if (weatherOverlayEnabled) {
-        // Bei Wettermodus wird die Oberflächenfarbe mit der Heatmap überblendet.
         let heatmapColor = applyHeatmap(uv, frame.weatherMode);
         shadedSurfaceColor = mix(surfaceColor, heatmapColor.rgb, heatmapColor.a);
     } else {
-        // Ohne Wetterdaten werden die Nachtslichter auf der dunklen Seite eingeblendet.
         emissiveColor = calculateNightLights(uv, sunLight);
     }
     
@@ -144,10 +154,12 @@ fn renderEarthLayer(uv: vec2<f32>, sunLight: f32) -> vec4<f32> {
     return vec4<f32>((shadedSurfaceColor * visibleLight) + emissiveColor, 1.0);
 }
 
+// Prüft, ob gültige Wetterpunkte vorliegen und ein wetterbezogener Darstellungsmodus (Temperatur oder AQI) aktiv ist.
 fn usesWeatherOverlay(mode: f32, pointCount: f32) -> bool {
     return pointCount > 0.0 && (mode == 1.0 || mode == 3.0);
 }
 
+// Berechnet die Emission von Stadtlichtern, die sanft in den unbeleuchteten Bereichen des Globus (Nachtseite) eingeblendet werden.
 fn calculateNightLights(uv: vec2<f32>, sunLight: f32) -> vec3<f32> {
     let nightColor = textureSample(nightTexture, mySampler, uv).rgb;
     let cityBrightness = max(nightColor.r, max(nightColor.g, nightColor.b));
@@ -156,7 +168,7 @@ fn calculateNightLights(uv: vec2<f32>, sunLight: f32) -> vec3<f32> {
     return vec3<f32>(cityLight) * nightBlend * vec3<f32>(1.0, 0.9, 0.7);
 }
 
-// Wetterwerte per bilinearer Interpolation aus den vier Nachbarpunkten bestimmen.
+// Ermittelt durch bilineare Interpolation der vier nächstgelegenen Rasterpunkte den lokalen Wetterwert und wandelt ihn in eine Heatmap-Farbe um.
 fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
     let lastIndex = arrayLength(&weather.values) - 1u;
     if (lastIndex <= 0u) { return vec4<f32>(0.0, 0.0, 0.0, 0.0); }
@@ -170,11 +182,9 @@ fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
     let rowCount = u32(180.0 / frame.latStep);
     let columnCount = u32(frame.gridWidth);
 
-    // Die zwei benachbarten Rasterzeilen werden auf gültige Indizes begrenzt.
     let row0 = clamp(u32(floor(latitudeIndex)), 0u, rowCount);
     let row1 = clamp(row0 + 1u, 0u, rowCount);
     
-    // Die Spalten laufen zyklisch, damit der Übergang an der Datumsgrenze sauber bleibt.
     let column0 = u32(floor(longitudeIndex)) % columnCount;
     let column1 = (column0 + 1u) % columnCount;
 
@@ -183,13 +193,11 @@ fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
     let index01 = min(row0 * columnCount + column1, lastIndex);
     let index11 = min(row1 * columnCount + column1, lastIndex);
 
-    // Je nach Modus wird Temperatur oder Luftqualität aus denselben Rasterpunkten gelesen.
     let value00 = sampleWeatherValue(index00, mode);
     let value10 = sampleWeatherValue(index10, mode);
     let value01 = sampleWeatherValue(index01, mode);
     let value11 = sampleWeatherValue(index11, mode);
 
-    // Aus den vier Stützstellen wird der geglättete Endwert berechnet.
     let interpolatedValue = bilinearInterpolate(
         value00,
         value10,
@@ -202,6 +210,7 @@ fn applyHeatmap(uv: vec2<f32>, mode: f32) -> vec4<f32> {
     return mapHeatmapColor(interpolatedValue, mode);
 }
 
+// Liest je nach aktivem Modus selektiv den Wert für Temperatur oder Luftqualität aus dem angegebenen Speicherindex aus.
 fn sampleWeatherValue(index: u32, mode: f32) -> f32 {
     if (mode == 1.0) {
         return weather.values[index].temperature;
@@ -209,12 +218,14 @@ fn sampleWeatherValue(index: u32, mode: f32) -> f32 {
     return weather.values[index].airQuality;
 }
 
+// Führt eine standardmäßige 2D-Interpolation zwischen vier Nachbarwerten basierend auf den fraktionalen UV-Koordinaten durch.
 fn bilinearInterpolate(v00: f32, v10: f32, v01: f32, v11: f32, fracLat: f32, fracLon: f32) -> f32 {
     let topRow = mix(v00, v01, fracLon);
     let bottomRow = mix(v10, v11, fracLon);
     return mix(topRow, bottomRow, fracLat);
 }
 
+// Leitet den interpolierten Metrik-Wert an die spezifische Farbskala-Funktion für Temperatur oder Luftqualität weiter.
 fn mapHeatmapColor(value: f32, mode: f32) -> vec4<f32> {
     if (mode == 1.0) {
         return mapTemperatureColor(value);
@@ -222,6 +233,7 @@ fn mapHeatmapColor(value: f32, mode: f32) -> vec4<f32> {
     return mapAirQualityColor(value);
 }
 
+// Weist einem Temperaturwert (in Celsius) eine entsprechende Farbe aus einem vordefinierten Verlauf (Blau über Grün/Gelb zu Rot) zu.
 fn mapTemperatureColor(value: f32) -> vec4<f32> {
     if (value <= -10.0) { return HEATMAP_BASE_COLOR; }
     if (value <= 10.0) { return mix(HEATMAP_BASE_COLOR, HEATMAP_GREEN, (value + 10.0) / 20.0); }
@@ -230,6 +242,7 @@ fn mapTemperatureColor(value: f32) -> vec4<f32> {
     return HEATMAP_RED;
 }
 
+// Weist einem Luftqualitätsindex (AQI) eine Farbe aus einem gesundheitlichen Warnstufen-Verlauf (Blau bis Dunkelrot) zu.
 fn mapAirQualityColor(value: f32) -> vec4<f32> {
     if (value <= 50.0) { return HEATMAP_BASE_COLOR; }
     if (value <= 100.0) { return mix(HEATMAP_BASE_COLOR, HEATMAP_GREEN, (value - 50.0) / 50.0); }
