@@ -1,63 +1,66 @@
 import { useState, useEffect, type RefObject } from 'react';
 import { GlobeRenderer } from '../../webgpu/GlobeRenderer';
-import './SunControls.css';
+import './SunControls.scss';
 
 interface SunControlsProps {
     rendererRef: RefObject<GlobeRenderer | null>;
 }
 
+/**
+ * Steuert den simulierten Sonnenstand für den WebGPU-Renderer.
+ * Bietet Slider für die X-, Y- und Z-Achse an.
+ */
 export function SunControls({ rendererRef }: SunControlsProps) {
-    // Initialwerte entsprechend deinem bisherigen Hardcoding im Renderer
-    const [x, setX] = useState<number>(0.37);
-    const [y, setY] = useState<number>(0.80);
-    const [z, setZ] = useState<number>(0.83);
+    const [sunCoordinates, setSunCoordinates] = useState({ x: 0.37, y: 0.8, z: 0.83 });
 
-    // Synchronisation mit dem WebGPU-Renderer bei jeder Slider-Bewegung
+    /**
+     * Synchronisiert den lokalen State mit dem WebGPU-Renderer.
+     * Wird bei jeder Änderung eines Sliders aufgerufen.
+     */
     useEffect(() => {
         if (rendererRef.current) {
-            rendererRef.current.setSunDirection(x, y, z);
+            rendererRef.current.setSunDirection(
+                sunCoordinates.x,
+                sunCoordinates.y,
+                sunCoordinates.z,
+            );
         }
-    }, [x, y, z, rendererRef]);
+    }, [sunCoordinates, rendererRef]);
+
+    /**
+     * Aktualisiert eine spezifische Koordinaten-Achse basierend auf dem Slider-Input.
+     */
+    const updateCoordinate = (axis: keyof typeof sunCoordinates, value: string) => {
+        setSunCoordinates((prev) => ({ ...prev, [axis]: parseFloat(value) }));
+    };
+
+    const sliderConfigs = [
+        { axis: 'x' as const, label: 'X-Achse (Links/Rechts)' },
+        { axis: 'y' as const, label: 'Y-Achse (Oben/Unten)' },
+        { axis: 'z' as const, label: 'Z-Achse (Tiefe)' },
+    ];
 
     return (
         <div className="sun-controls-panel">
             <h3 className="sun-controls-title">Sonnenstand (Licht)</h3>
 
-            <div className="slider-group">
-                <div className="slider-label">
-                    <span>X-Achse (Links/Rechts)</span>
-                    <span>{x.toFixed(2)}</span>
+            {sliderConfigs.map(({ axis, label }) => (
+                <div className="slider-group" key={axis}>
+                    <div className="slider-label">
+                        <span>{label}</span>
+                        <span>{sunCoordinates[axis].toFixed(2)}</span>
+                    </div>
+                    <input
+                        type="range"
+                        min="-1.0"
+                        max="1.0"
+                        step="0.01"
+                        value={sunCoordinates[axis]}
+                        onChange={(e) => updateCoordinate(axis, e.target.value)}
+                        className="slider-input"
+                    />
                 </div>
-                <input
-                    type="range" min="-1.0" max="1.0" step="0.01"
-                    value={x} onChange={(e) => setX(parseFloat(e.target.value))}
-                    className="slider-input"
-                />
-            </div>
-
-            <div className="slider-group">
-                <div className="slider-label">
-                    <span>Y-Achse (Oben/Unten)</span>
-                    <span>{y.toFixed(2)}</span>
-                </div>
-                <input
-                    type="range" min="-1.0" max="1.0" step="0.01"
-                    value={y} onChange={(e) => setY(parseFloat(e.target.value))}
-                    className="slider-input"
-                />
-            </div>
-
-            <div className="slider-group">
-                <div className="slider-label">
-                    <span>Z-Achse (Tiefe)</span>
-                    <span>{z.toFixed(2)}</span>
-                </div>
-                <input
-                    type="range" min="-1.0" max="1.0" step="0.01"
-                    value={z} onChange={(e) => setZ(parseFloat(e.target.value))}
-                    className="slider-input"
-                />
-            </div>
+            ))}
         </div>
     );
 }

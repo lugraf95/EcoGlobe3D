@@ -4,14 +4,16 @@ import { GlobeRenderer } from '../webgpu/GlobeRenderer';
 import { fetchWeatherData, type GridData } from '../services/dataService';
 
 import { LayerDropdown } from './layerDropdown/LayerDropdown.tsx';
-import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
+import { LoadingSpinner } from './loadingSpinner/LoadingSpinner.tsx';
 import { GlobeTooltip } from './globeTooltip/GlobeTooltip.tsx';
-// NEU: Import der Legenden-Komponente
 import { Legend } from './legend/Legend.tsx';
-// NEU: Import der Sonnen-Steuerung
 import { SunControls } from './sunControls/SunControls.tsx';
-import './App.css';
+import './App.scss';
 
+/**
+ * Hauptkomponente der Anwendung.
+ * Steuert das Routing, den globalen Zustand (Wetterdaten) und den WebGPU-Renderer.
+ */
 export function App() {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const rendererRef = useRef<GlobeRenderer | null>(null);
@@ -26,21 +28,37 @@ export function App() {
     const [isEngineReady, setIsEngineReady] = useState<boolean>(false);
     const [currentData, setCurrentData] = useState<GridData | null>(null);
 
+    /**
+     * Lädt die spezifischen Wetterdaten für den ausgewählten Layer.
+     * Aktualisiert anschließend den WebGPU-Renderer mit den neuen Daten.
+     */
     const loadDataForLayer = async (layer: string) => {
         setIsLoading(true);
         try {
             const data = await fetchWeatherData(layer);
             setCurrentData(data);
+
+            // Renderer aktualisieren, sobald Daten vorhanden sind
             if (rendererRef.current) {
-                rendererRef.current.updateLayerData(layer, data.buffer, data.cols, data.latStep, data.lonStep);
+                rendererRef.current.updateLayerData(
+                    layer,
+                    data.buffer,
+                    data.cols,
+                    data.latStep,
+                    data.lonStep,
+                );
             }
-        } catch (err) {
-            console.error(`Failed to load data for layer "${layer}".`, err);
+        } catch (error) {
+            console.error(`Failed to load data for layer "${layer}".`, error);
         } finally {
             setIsLoading(false);
         }
     };
 
+    /**
+     * Initialisiert den WebGPU-Renderer einmalig beim Mounten der Komponente.
+     * Kümmert sich auch um das Aufräumen (Stop) beim Unmount.
+     */
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -57,10 +75,9 @@ export function App() {
 
                 renderer.start();
                 rendererRef.current = renderer;
-
                 setIsEngineReady(true);
-            } catch (err) {
-                console.error('WebGPU initialization error:', err);
+            } catch (error) {
+                console.error('WebGPU initialization error:', error);
                 if (isMounted) setIsLoading(false);
             }
         })();
@@ -71,12 +88,19 @@ export function App() {
         };
     }, []);
 
+    /**
+     * Reagiert auf Änderungen des aktiven Layers und lädt die passenden Daten nach.
+     */
     useEffect(() => {
         if (isEngineReady) {
             void loadDataForLayer(activeLayer);
         }
     }, [isEngineReady, activeLayer]);
 
+    /**
+     * Validiert die URL-Parameter.
+     * Leitet auf die Standardansicht weiter, falls ein ungültiger Layer aufgerufen wird.
+     */
     useEffect(() => {
         if (layerId && !validLayers.includes(layerId)) {
             navigate(`/normal`, { replace: true });
@@ -89,12 +113,11 @@ export function App() {
 
     return (
         <div className="app-container">
-            <LayerDropdown
-                activeLayer={activeLayer}
-                onLayerChange={handleLayerChange}
-            />
+            <LayerDropdown activeLayer={activeLayer} onLayerChange={handleLayerChange} />
 
             {isLoading && <LoadingSpinner />}
+
+            {/* 3D Globus Render-Fläche */}
             <canvas ref={canvasRef} className="globe-canvas" />
 
             <GlobeTooltip
@@ -105,7 +128,6 @@ export function App() {
             />
 
             <SunControls rendererRef={rendererRef} />
-
             <Legend activeLayer={activeLayer} />
         </div>
     );
