@@ -1,4 +1,4 @@
-export const particleRenderShader = /*wgsl*/ `
+export const particleRenderShader = /*wgsl*/`
 struct FrameData { 
     time: f32, isCloud: f32, rotX: f32, rotY: f32,
     zoom: f32, aspectRatio: f32, sunDirX: f32, sunDirY: f32,
