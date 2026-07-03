@@ -1,4 +1,4 @@
-export const shaderCode = /*wgsl*/`
+export const shaderCode = /*wgsl*/ `
 struct FrameData { 
     time: f32,          
     isCloud: f32,       

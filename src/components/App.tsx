@@ -4,7 +4,7 @@ import { GlobeRenderer } from '../webgpu/GlobeRenderer';
 import { fetchWeatherData, type GridData } from '../services/dataService';
 
 import { LayerDropdown } from './layerDropdown/LayerDropdown.tsx';
-import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
+import { LoadingSpinner } from './loadingSpinner/LoadingSpinner.tsx';
 import { GlobeTooltip } from './globeTooltip/GlobeTooltip.tsx';
 import { Legend } from './legend/Legend.tsx';
 import { SunControls } from './sunControls/SunControls.tsx';
@@ -40,7 +40,13 @@ export function App() {
 
             // Renderer aktualisieren, sobald Daten vorhanden sind
             if (rendererRef.current) {
-                rendererRef.current.updateLayerData(layer, data.buffer, data.cols, data.latStep, data.lonStep);
+                rendererRef.current.updateLayerData(
+                    layer,
+                    data.buffer,
+                    data.cols,
+                    data.latStep,
+                    data.lonStep,
+                );
             }
         } catch (error) {
             console.error(`Failed to load data for layer "${layer}".`, error);
@@ -107,10 +113,7 @@ export function App() {
 
     return (
         <div className="app-container">
-            <LayerDropdown
-                activeLayer={activeLayer}
-                onLayerChange={handleLayerChange}
-            />
+            <LayerDropdown activeLayer={activeLayer} onLayerChange={handleLayerChange} />
 
             {isLoading && <LoadingSpinner />}
 

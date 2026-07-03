@@ -1,9 +1,9 @@
-export type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'air_quality';;
+export type ClimateLayer = 'normal' | 'temperature' | 'wind' | 'air_quality';
 
 const API_BASE_URL = 'https://api.open-meteo.com/v1/forecast';
 
 const TARGET_POINTS = 300; // <--- HIER DEINE GEWÜNSCHTE PUNKTZAHL EINTRAGEN
-const CHUNK_SIZE = 150;    // Groß genug, damit 100 Punkte in exakt EINEN Request passen
+const CHUNK_SIZE = 150; // Groß genug, damit 100 Punkte in exakt EINEN Request passen
 const CONCURRENT_REQUESTS = 1;
 
 export interface GridData {
@@ -17,7 +17,6 @@ let cachedGlobalWeatherBuffer: GridData | null = null;
 let isFetchingWeather = false;
 let fetchWeatherPromise: Promise<GridData> | null = null;
 
-
 function createDynamicGrid(targetPoints: number) {
     const rows = Math.max(1, Math.round(Math.sqrt(targetPoints / 2)));
     const cols = Math.round(targetPoints / rows);
@@ -30,9 +29,9 @@ function createDynamicGrid(targetPoints: number) {
 
     let offset = 0;
     for (let i = 0; i <= rows; i++) {
-        const lat = 90 - (i * latStep);
+        const lat = 90 - i * latStep;
         for (let j = 0; j < cols; j++) {
-            const lon = -180 + (j * lonStep);
+            const lon = -180 + j * lonStep;
             coordinates.push({ lat, lon, index: offset });
             buffer[offset] = lat;
             buffer[offset + 1] = lon;
@@ -56,36 +55,41 @@ async function performGlobalWeatherDownload(): Promise<GridData> {
     for (let i = 0; i < chunks.length; i += CONCURRENT_REQUESTS) {
         const batch = chunks.slice(i, i + CONCURRENT_REQUESTS);
 
-        await Promise.all(batch.map(async (chunk) => {
-            const latString = chunk.map(c => c.lat.toFixed(2)).join(',');
-            const lonString = chunk.map(c => c.lon.toFixed(2)).join(',');
-            
-            // Beide APIs parallel abrufen (Wetter + Air Quality)
-            const weatherUrl = `${API_BASE_URL}?latitude=${latString}&longitude=${lonString}&current=temperature_2m,wind_u_component_10m,wind_v_component_10m`;
-            const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latString}&longitude=${lonString}&current=us_aqi`;
+        await Promise.all(
+            batch.map(async (chunk) => {
+                const latString = chunk.map((c) => c.lat.toFixed(2)).join(',');
+                const lonString = chunk.map((c) => c.lon.toFixed(2)).join(',');
 
-            try {
-                const [weatherRes, aqiRes] = await Promise.all([
-                    fetch(weatherUrl),
-                    fetch(aqiUrl)
-                ]);
-                
-                const weatherData = await weatherRes.json();
-                const aqiData = await aqiRes.json();
-                
-                const weatherArray = Array.isArray(weatherData) ? weatherData : [weatherData];
-                const aqiArray = Array.isArray(aqiData) ? aqiData : [aqiData];
+                // Beide APIs parallel abrufen (Wetter + Air Quality)
+                const weatherUrl = `${API_BASE_URL}?latitude=${latString}&longitude=${lonString}&current=temperature_2m,wind_u_component_10m,wind_v_component_10m`;
+                const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${latString}&longitude=${lonString}&current=us_aqi`;
 
-                for (let j = 0; j < chunk.length; j++) {
-                    buffer[chunk[j].index + 2] = weatherArray[j]?.current?.temperature_2m ?? 0.0;
-                    buffer[chunk[j].index + 3] = weatherArray[j]?.current?.wind_u_component_10m ?? 0.0;
-                    buffer[chunk[j].index + 4] = weatherArray[j]?.current?.wind_v_component_10m ?? 0.0;
-                    buffer[chunk[j].index + 5] = aqiArray[j]?.current?.us_aqi ?? 0.0; // AQI wandert exakt in den freien pad1 Speicherplatz!
+                try {
+                    const [weatherRes, aqiRes] = await Promise.all([
+                        fetch(weatherUrl),
+                        fetch(aqiUrl),
+                    ]);
+
+                    const weatherData = await weatherRes.json();
+                    const aqiData = await aqiRes.json();
+
+                    const weatherArray = Array.isArray(weatherData) ? weatherData : [weatherData];
+                    const aqiArray = Array.isArray(aqiData) ? aqiData : [aqiData];
+
+                    for (let j = 0; j < chunk.length; j++) {
+                        buffer[chunk[j].index + 2] =
+                            weatherArray[j]?.current?.temperature_2m ?? 0.0;
+                        buffer[chunk[j].index + 3] =
+                            weatherArray[j]?.current?.wind_u_component_10m ?? 0.0;
+                        buffer[chunk[j].index + 4] =
+                            weatherArray[j]?.current?.wind_v_component_10m ?? 0.0;
+                        buffer[chunk[j].index + 5] = aqiArray[j]?.current?.us_aqi ?? 0.0; // AQI wandert exakt in den freien pad1 Speicherplatz!
+                    }
+                } catch (error) {
+                    console.error(`[API] Fehler:`, error);
                 }
-            } catch (error) {
-                console.error(`[API] Fehler:`, error);
-            }
-        }));
+            }),
+        );
     }
 
     console.log('[API] Scan abgeschlossen!');

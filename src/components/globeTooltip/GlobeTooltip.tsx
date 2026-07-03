@@ -21,7 +21,12 @@ interface TooltipState {
  * Zeigt beim Klick auf den Globus einen Tooltip mit spezifischen Messwerten an.
  * Berechnet die geographischen Koordinaten aus dem Klick-Event.
  */
-export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData }: GlobeTooltipProps) {
+export function GlobeTooltip({
+    canvasRef,
+    rendererRef,
+    activeLayer,
+    currentData,
+}: GlobeTooltipProps) {
     const [tooltipState, setTooltipState] = useState<TooltipState | null>(null);
 
     /**
@@ -33,12 +38,20 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
 
         const handleCanvasClick = (event: MouseEvent) => {
             // Abbruchbedingung: Keine Daten vorhanden oder Standard-Layer aktiv
-            if (!rendererRef.current || !currentData || currentData.cols === 0 || activeLayer === 'normal') {
+            if (
+                !rendererRef.current ||
+                !currentData ||
+                currentData.cols === 0 ||
+                activeLayer === 'normal'
+            ) {
                 setTooltipState(null);
                 return;
             }
 
-            const coordinates = rendererRef.current.getLatLonFromScreen(event.clientX, event.clientY);
+            const coordinates = rendererRef.current.getLatLonFromScreen(
+                event.clientX,
+                event.clientY,
+            );
             if (!coordinates) {
                 setTooltipState(null);
                 return;
@@ -58,13 +71,15 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
             let tooltipText = `Breite.: ${coordinates.lat.toFixed(1)}°, Länge.: ${coordinates.lon.toFixed(1)}°\n`;
 
             const textGenerators: Record<string, () => string> = {
-                temperature: () => `Temperatur: ${currentData.buffer[pointIndex + 2].toFixed(1)} °C`,
+                temperature: () =>
+                    `Temperatur: ${currentData.buffer[pointIndex + 2].toFixed(1)} °C`,
                 wind: () => {
                     const u = currentData.buffer[pointIndex + 3];
                     const v = currentData.buffer[pointIndex + 4];
                     return `Windgeschw.: ${Math.sqrt(u * u + v * v).toFixed(1)} km/h`;
                 },
-                air_quality: () => `Luftqualität (AQI): ${Math.round(currentData.buffer[pointIndex + 5])}`
+                air_quality: () =>
+                    `Luftqualität (AQI): ${Math.round(currentData.buffer[pointIndex + 5])}`,
             };
 
             if (textGenerators[activeLayer]) {
@@ -74,7 +89,7 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
             setTooltipState({
                 x: event.clientX,
                 y: event.clientY,
-                text: tooltipText
+                text: tooltipText,
             });
         };
 
@@ -93,7 +108,7 @@ export function GlobeTooltip({ canvasRef, rendererRef, activeLayer, currentData 
             className="globe-tooltip"
             style={{
                 left: tooltipState.x + 15,
-                top: tooltipState.y + 15
+                top: tooltipState.y + 15,
             }}
         >
             {tooltipState.text}

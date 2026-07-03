@@ -33,7 +33,7 @@ const CLIMATE_LAYERS = [
         name: 'Luftqualität',
         icon: CloudFog,
         desc: 'Globale Luftqualität (AQI) und Feinstaubbelastung in Echtzeit.',
-    }
+    },
 ];
 
 /**
@@ -43,12 +43,12 @@ const CLIMATE_LAYERS = [
 export function LayerDropdown({ activeLayer, onLayerChange }: LayerDropdownProps) {
     const [isMenuExpanded, setIsMenuExpanded] = useState(true);
 
-    const activeLayerInfo = CLIMATE_LAYERS.find(layer => layer.id === activeLayer) || CLIMATE_LAYERS[0];
+    const activeLayerInfo =
+        CLIMATE_LAYERS.find((layer) => layer.id === activeLayer) || CLIMATE_LAYERS[0];
 
     return (
         <div className="control-panel-aside">
             <div className="collapsible-layers">
-
                 <button
                     onClick={() => setIsMenuExpanded(!isMenuExpanded)}
                     className="toggle-header"

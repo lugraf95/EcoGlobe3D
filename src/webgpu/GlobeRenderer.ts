@@ -61,7 +61,11 @@ export class GlobeRenderer {
     }
 
     // Hilfsmethode, die das Erstellen und Befüllen von Buffern deutlich verkürzt
-    private createBuffer(size: number, usage: number, data?: Float32Array | Uint32Array): GPUBuffer {
+    private createBuffer(
+        size: number,
+        usage: number,
+        data?: Float32Array | Uint32Array,
+    ): GPUBuffer {
         const buffer = this.device.createBuffer({ size, usage });
         if (data) {
             this.device.queue.writeBuffer(buffer, 0, data);
@@ -70,7 +74,14 @@ export class GlobeRenderer {
     }
 
     // Überschreibt nur die Werte im bereits existierenden Speicher (Performance-Boost)
-    private updateUniforms(time: number, isCloud: number, rotX: number, rotY: number, zoom: number, aspectRatio: number): Float32Array {
+    private updateUniforms(
+        time: number,
+        isCloud: number,
+        rotX: number,
+        rotY: number,
+        zoom: number,
+        aspectRatio: number,
+    ): Float32Array {
         this.uniformData[0] = time;
         this.uniformData[1] = isCloud;
         this.uniformData[2] = rotX;
@@ -98,13 +109,15 @@ export class GlobeRenderer {
         const texture = this.device.createTexture({
             size: [imageBitmap.width, imageBitmap.height, 1],
             format: 'rgba8unorm',
-            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+            usage:
+                GPUTextureUsage.TEXTURE_BINDING |
+                GPUTextureUsage.COPY_DST |
+                GPUTextureUsage.RENDER_ATTACHMENT,
         });
-        this.device.queue.copyExternalImageToTexture(
-            { source: imageBitmap },
-            { texture },
-            [imageBitmap.width, imageBitmap.height],
-        );
+        this.device.queue.copyExternalImageToTexture({ source: imageBitmap }, { texture }, [
+            imageBitmap.width,
+            imageBitmap.height,
+        ]);
         return texture;
     }
 
@@ -134,7 +147,7 @@ export class GlobeRenderer {
 
         for (let y = 0; y < heightSegments; y++) {
             for (let x = 0; x < widthSegments; x++) {
-                const first = (y * (widthSegments + 1)) + x;
+                const first = y * (widthSegments + 1) + x;
                 const second = first + widthSegments + 1;
 
                 indices.push(first, second, first + 1);
@@ -144,7 +157,7 @@ export class GlobeRenderer {
 
         return {
             vertices: new Float32Array(vertices),
-            indices: new Uint32Array(indices)
+            indices: new Uint32Array(indices),
         };
     }
 
@@ -164,19 +177,31 @@ export class GlobeRenderer {
         const cloudTex = await this.loadTexture('/Clouds.png');
         const nightTex = await this.loadTexture('/Night_Lights.jpg');
 
-        const sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat' });
+        const sampler = this.device.createSampler({
+            magFilter: 'linear',
+            minFilter: 'linear',
+            addressModeU: 'repeat',
+        });
 
         this.earthTimeBuf = this.createBuffer(64, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
         this.cloudTimeBuf = this.createBuffer(64, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
         this.weatherBuf = this.createBuffer(
             GlobeRenderer.MAX_WEATHER_POINTS * 32,
-            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         );
 
         const sphereData = this.createSphere(1.0, 64, 64);
-        this.vertexBuf = this.createBuffer(sphereData.vertices.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, sphereData.vertices);
-        this.indexBuf = this.createBuffer(sphereData.indices.byteLength, GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST, sphereData.indices);
+        this.vertexBuf = this.createBuffer(
+            sphereData.vertices.byteLength,
+            GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+            sphereData.vertices,
+        );
+        this.indexBuf = this.createBuffer(
+            sphereData.indices.byteLength,
+            GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+            sphereData.indices,
+        );
         this.indexCount = sphereData.indices.length;
 
         this.pipeline = this.device.createRenderPipeline({
@@ -184,28 +209,40 @@ export class GlobeRenderer {
             vertex: {
                 module: this.device.createShaderModule({ code: shaderCode }),
                 entryPoint: 'vertexMain',
-                buffers: [{
-                    arrayStride: 40,
-                    attributes: [
-                        { shaderLocation: 0, offset: 0, format: 'float32x4' },
-                        { shaderLocation: 1, offset: 16, format: 'float32x4' },
-                        { shaderLocation: 2, offset: 32, format: 'float32x2' }
-                    ]
-                }],
+                buffers: [
+                    {
+                        arrayStride: 40,
+                        attributes: [
+                            { shaderLocation: 0, offset: 0, format: 'float32x4' },
+                            { shaderLocation: 1, offset: 16, format: 'float32x4' },
+                            { shaderLocation: 2, offset: 32, format: 'float32x2' },
+                        ],
+                    },
+                ],
             },
             fragment: {
                 module: this.device.createShaderModule({ code: shaderCode }),
                 entryPoint: 'fragmentMain',
-                targets: [{
-                    format: this.format,
-                    blend: {
-                        color: { operation: 'add', srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' },
-                        alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+                targets: [
+                    {
+                        format: this.format,
+                        blend: {
+                            color: {
+                                operation: 'add',
+                                srcFactor: 'src-alpha',
+                                dstFactor: 'one-minus-src-alpha',
+                            },
+                            alpha: { operation: 'add', srcFactor: 'one', dstFactor: 'one' },
+                        },
                     },
-                }],
+                ],
             },
             primitive: { topology: 'triangle-list', cullMode: 'back' },
-            depthStencil: { depthWriteEnabled: true, depthCompare: 'less-equal', format: 'depth24plus' },
+            depthStencil: {
+                depthWriteEnabled: true,
+                depthCompare: 'less-equal',
+                format: 'depth24plus',
+            },
         });
 
         this.earthBG = this.device.createBindGroup({
@@ -242,13 +279,13 @@ export class GlobeRenderer {
     private async initParticleSystem() {
         this.particleBuffer = this.createBuffer(
             this.PARTICLE_COUNT * 32,
-            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST
+            GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         );
 
         const computeModule = this.device.createShaderModule({ code: particleComputeShader });
         this.particleComputePipeline = this.device.createComputePipeline({
             layout: 'auto',
-            compute: { module: computeModule, entryPoint: 'computeMain' }
+            compute: { module: computeModule, entryPoint: 'computeMain' },
         });
 
         const renderModule = this.device.createShaderModule({ code: particleRenderShader });
@@ -256,11 +293,21 @@ export class GlobeRenderer {
             layout: 'auto',
             vertex: { module: renderModule, entryPoint: 'vertexMain' },
             fragment: {
-                module: renderModule, entryPoint: 'fragmentMain',
-                targets: [{ format: this.format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one' }, alpha: {} } }]
+                module: renderModule,
+                entryPoint: 'fragmentMain',
+                targets: [
+                    {
+                        format: this.format,
+                        blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one' }, alpha: {} },
+                    },
+                ],
             },
             primitive: { topology: 'line-list' },
-            depthStencil: { depthWriteEnabled: false, depthCompare: 'less-equal', format: 'depth24plus' }
+            depthStencil: {
+                depthWriteEnabled: false,
+                depthCompare: 'less-equal',
+                format: 'depth24plus',
+            },
         });
 
         this.particleComputeBindGroup = this.device.createBindGroup({
@@ -268,16 +315,16 @@ export class GlobeRenderer {
             entries: [
                 { binding: 0, resource: { buffer: this.earthTimeBuf } },
                 { binding: 1, resource: { buffer: this.weatherBuf } },
-                { binding: 2, resource: { buffer: this.particleBuffer } }
-            ]
+                { binding: 2, resource: { buffer: this.particleBuffer } },
+            ],
         });
 
         this.particleRenderBindGroup = this.device.createBindGroup({
             layout: this.particleRenderPipeline.getBindGroupLayout(0),
             entries: [
                 { binding: 0, resource: { buffer: this.earthTimeBuf } },
-                { binding: 2, resource: { buffer: this.particleBuffer } }
-            ]
+                { binding: 2, resource: { buffer: this.particleBuffer } },
+            ],
         });
     }
 
@@ -288,8 +335,8 @@ export class GlobeRenderer {
             const encoder = this.device.createCommandEncoder();
 
             const rotX = this.inputController.rotX;
-            const globalRotY = this.inputController.rotY + (time * 0.02);
-            const cloudRotY = this.inputController.rotY + (time * 0.03);
+            const globalRotY = this.inputController.rotY + time * 0.02;
+            const cloudRotY = this.inputController.rotY + time * 0.03;
             const zoom = this.inputController.zoom;
             const aspectRatio = this.canvas.width / this.canvas.height;
 
@@ -307,12 +354,14 @@ export class GlobeRenderer {
 
             // 2. RENDER PASS
             const pass = encoder.beginRenderPass({
-                colorAttachments: [{
-                    view: this.context.getCurrentTexture().createView(),
-                    clearValue: { r: 0.01, g: 0.01, b: 0.05, a: 1.0 },
-                    loadOp: 'clear',
-                    storeOp: 'store',
-                }],
+                colorAttachments: [
+                    {
+                        view: this.context.getCurrentTexture().createView(),
+                        clearValue: { r: 0.01, g: 0.01, b: 0.05, a: 1.0 },
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                    },
+                ],
                 depthStencilAttachment: {
                     view: this.depthTexture.createView(),
                     depthClearValue: 1.0,
@@ -331,7 +380,14 @@ export class GlobeRenderer {
 
             // B: Wolken zeichnen
             if (this.weatherMode === 0) {
-                const cloudData = this.updateUniforms(time, 1.0, rotX, cloudRotY, zoom, aspectRatio);
+                const cloudData = this.updateUniforms(
+                    time,
+                    1.0,
+                    rotX,
+                    cloudRotY,
+                    zoom,
+                    aspectRatio,
+                );
                 this.device.queue.writeBuffer(this.cloudTimeBuf, 0, cloudData);
                 pass.setBindGroup(0, this.cloudBG);
                 pass.drawIndexed(this.indexCount);
@@ -358,9 +414,25 @@ export class GlobeRenderer {
         }
     }
 
-    public updateLayerData(layerType: string, bufferData: Float32Array, gridWidth = 0, latStep = 0, lonStep = 0) {
-        this.weatherMode = layerType === 'temperature' ? 1 : layerType === 'wind' ? 2 : layerType === 'air_quality' ? 3 : 0;
-        this.weatherPointCount = Math.min(Math.floor(bufferData.length / 8), GlobeRenderer.MAX_WEATHER_POINTS);
+    public updateLayerData(
+        layerType: string,
+        bufferData: Float32Array,
+        gridWidth = 0,
+        latStep = 0,
+        lonStep = 0,
+    ) {
+        this.weatherMode =
+            layerType === 'temperature'
+                ? 1
+                : layerType === 'wind'
+                  ? 2
+                  : layerType === 'air_quality'
+                    ? 3
+                    : 0;
+        this.weatherPointCount = Math.min(
+            Math.floor(bufferData.length / 8),
+            GlobeRenderer.MAX_WEATHER_POINTS,
+        );
 
         this.gridWidth = gridWidth;
         this.latStep = latStep;
@@ -368,12 +440,18 @@ export class GlobeRenderer {
 
         if (this.weatherPointCount > 0) {
             const uploadLength = this.weatherPointCount * 8;
-            const uploadData = uploadLength === bufferData.length ? bufferData : bufferData.subarray(0, uploadLength);
+            const uploadData =
+                uploadLength === bufferData.length
+                    ? bufferData
+                    : bufferData.subarray(0, uploadLength);
             this.device.queue.writeBuffer(this.weatherBuf, 0, uploadData);
         }
     }
 
-    public getLatLonFromScreen(clientX: number, clientY: number): { lat: number, lon: number } | null {
+    public getLatLonFromScreen(
+        clientX: number,
+        clientY: number,
+    ): { lat: number; lon: number } | null {
         if (!this.inputController) return null;
 
         const rect = this.canvas.getBoundingClientRect();
@@ -382,7 +460,7 @@ export class GlobeRenderer {
         const aspectRatio = rect.width / rect.height;
 
         const rotX = this.inputController.rotX;
-        const globalRotY = this.inputController.rotY + (this.currentTime * 0.02);
+        const globalRotY = this.inputController.rotY + this.currentTime * 0.02;
         const scale = 0.6 * this.inputController.zoom;
 
         const rotatedX = (ndcX * aspectRatio) / scale;
@@ -393,11 +471,13 @@ export class GlobeRenderer {
 
         const rotatedZ = Math.sqrt(1.0 - radiusSq);
 
-        const sx = Math.sin(-rotX), cx = Math.cos(-rotX);
+        const sx = Math.sin(-rotX),
+            cx = Math.cos(-rotX);
         const y1 = rotatedY * cx - rotatedZ * sx;
         const z1 = rotatedY * sx + rotatedZ * cx;
 
-        const sy = Math.sin(-globalRotY), cy = Math.cos(-globalRotY);
+        const sy = Math.sin(-globalRotY),
+            cy = Math.cos(-globalRotY);
         const origX = rotatedX * cy + z1 * sy;
         const origY = y1;
         const origZ = -rotatedX * sy + z1 * cy;
@@ -407,7 +487,7 @@ export class GlobeRenderer {
         let theta = Math.atan2(origZ, -origX);
         if (theta < 0) theta += 2 * Math.PI;
 
-        const lon = (theta / (2 * Math.PI) * 360.0) - 180.0;
+        const lon = (theta / (2 * Math.PI)) * 360.0 - 180.0;
 
         return { lat, lon };
     }
