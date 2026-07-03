@@ -1,4 +1,4 @@
-import './Legend.css';
+import './Legend.scss';
 
 interface LegendProps {
     activeLayer: string;

@@ -8,7 +8,7 @@ import { LoadingSpinner } from "./loadingSpinner/LoadingSpinner.tsx";
 import { GlobeTooltip } from './globeTooltip/GlobeTooltip.tsx';
 import { Legend } from './legend/Legend.tsx';
 import { SunControls } from './sunControls/SunControls.tsx';
-import './App.css';
+import './App.scss';
 
 /**
  * Hauptkomponente der Anwendung.

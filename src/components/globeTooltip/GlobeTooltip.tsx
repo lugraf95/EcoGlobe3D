@@ -2,7 +2,7 @@ import { useEffect, useState, type RefObject } from 'react';
 import { GlobeRenderer } from '../../webgpu/GlobeRenderer';
 import type { GridData } from '../../services/dataService';
 
-import './GlobeTooltip.css';
+import './GlobeTooltip.scss';
 
 interface GlobeTooltipProps {
     canvasRef: RefObject<HTMLCanvasElement | null>;

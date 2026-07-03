@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Globe, Thermometer, Wind, CloudFog, Sliders, ChevronUp, ChevronDown } from 'lucide-react';
-import './LayerDropdown.css';
+import './LayerDropdown.scss';
 
 interface LayerDropdownProps {
     activeLayer: string;

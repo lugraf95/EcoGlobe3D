@@ -1,6 +1,6 @@
 import { useState, useEffect, type RefObject } from 'react';
 import { GlobeRenderer } from '../../webgpu/GlobeRenderer';
-import './SunControls.css';
+import './SunControls.scss';
 
 interface SunControlsProps {
     rendererRef: RefObject<GlobeRenderer | null>;
